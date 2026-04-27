@@ -1,13 +1,14 @@
-// lib/screens/home_screen.dart — FULL FIXED FILE
-// Fix: removed FadeTransition (was causing blank body), simplified animation
+// lib/screens/home_screen.dart — uses AppBottomNavBar
 
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/session_model.dart';
+import '../models/event_model.dart';
 import '../services/session_service.dart';
 import '../services/database_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/toast_helper.dart';
+import '../widgets/bottom_nav_bar.dart';
 import '../main.dart';
 import 'attendance_screen.dart';
 
@@ -23,6 +24,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _pendingCount = 0;
   int _selectedTab = 0;
   bool _loaded = false;
+  List<EventModel> _upcomingEvents = [];
+  int _totalEvents = 0;
+  int _completedEvents = 0;
+  int _totalAttendees = 0;
 
   @override
   void initState() {
@@ -39,12 +44,30 @@ class _HomeScreenState extends State<HomeScreen> {
       _isOnline = result != ConnectivityResult.none;
       _loaded = true;
     });
+    await _loadEvents();
     await _checkPending();
 
     Connectivity().onConnectivityChanged.listen((r) {
       if (!mounted) return;
       setState(() => _isOnline = r != ConnectivityResult.none);
       if (_isOnline) _checkPending();
+    });
+  }
+
+  Future<void> _loadEvents() async {
+    if (!mounted) return;
+    setState(() {
+      _totalEvents = 1;
+      _completedEvents = 0;
+      _totalAttendees = 0;
+      _upcomingEvents = [
+        EventModel(
+          eventId: 1,
+          eventName: 'dxcvv',
+          eventDate: 'Apr 16',
+          eventTime: '10:00 AM',
+        )
+      ];
     });
   }
 
@@ -89,6 +112,15 @@ class _HomeScreenState extends State<HomeScreen> {
     await _checkPending();
   }
 
+  void _onFabPressed() {
+    showToast(context, 'Add event — coming soon!', type: ToastType.info);
+  }
+
+  String get _userInitial {
+    final name = _session?.firstName ?? '';
+    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,108 +129,128 @@ class _HomeScreenState extends State<HomeScreen> {
         bottom: false,
         child: Column(
           children: [
-            _buildHeader(),
-            if (_isOnline && _pendingCount > 0) _buildSyncNotice(),
-            Expanded(child: _buildBody()),
+            if (_selectedTab == 0) _buildHeader(),
+            if (_selectedTab == 0 && _isOnline && _pendingCount > 0)
+              _buildSyncNotice(),
+            Expanded(child: _buildTabContent()),
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: AppBottomNavBar(
+        selectedIndex: _selectedTab,
+        onTabChanged: (i) => setState(() => _selectedTab = i),
+        onFabPressed: _onFabPressed,
+      ),
     );
   }
 
-  // ── Header ───────────────────────────────────────────────────────
+  Widget _buildTabContent() {
+    if (!_loaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    switch (_selectedTab) {
+      case 0:
+        return _buildBody(); // Home
+      case 1:
+        return _buildEventsTab(); // Events
+      case 2:
+        return _buildQrTab(); // QR Code
+      case 3:
+        return _buildSettingsTab(); // Settings
+      default:
+        return _buildBody();
+    }
+  }
+
+  // ── Header ────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       decoration: const BoxDecoration(gradient: AppColors.headerGradient),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               _buildSeal(),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Ormoc City LGU',
+                    Text('City of Ormoc',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700)),
-                    Text('Government Portal',
-                        style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    Text('EVENT MANAGEMENT',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.4)),
                   ],
                 ),
               ),
-              TextButton(
-                onPressed: _logout,
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.18),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side:
-                        BorderSide(color: Colors.white.withValues(alpha: 0.30)),
+              GestureDetector(
+                onTap: _logout,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4B6CB7),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.40),
+                        width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _userInitial,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
-                child: const Text('↪ Logout',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700)),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Welcome back,',
-                          style:
-                              TextStyle(color: Colors.white70, fontSize: 12)),
-                      const SizedBox(height: 2),
-                      Text(
-                        _session?.firstName ?? '—',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.20),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 3),
-                        child: Text(
-                          (_session?.accountType ?? '').toUpperCase(),
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _buildStatusBadge(),
-              ],
-            ),
+          const SizedBox(height: 20),
+          Text('Good day! 👋',
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.75),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 4),
+          const Text('Ormoc City Events',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  height: 1.1)),
+          const SizedBox(height: 4),
+          Text('Manage events & attendance',
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400)),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                  child: _buildDarkStatCard(
+                      label: 'Total Events',
+                      value: _totalEvents.toString(),
+                      icon: Icons.calendar_today_outlined)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _buildDarkStatCard(
+                      label: 'Attendees',
+                      value: _totalAttendees.toString(),
+                      icon: Icons.people_outline_rounded)),
+            ],
           ),
         ],
       ),
@@ -213,58 +265,53 @@ class _HomeScreenState extends State<HomeScreen> {
         color: Colors.white,
         shape: BoxShape.circle,
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8)
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2), blurRadius: 8)
         ],
       ),
       child: const ClipOval(
-        child: Icon(Icons.location_city, color: AppColors.primary, size: 22),
+        child:
+            Icon(Icons.location_city, color: AppColors.primary, size: 22),
       ),
     );
   }
 
-  Widget _buildStatusBadge() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+  Widget _buildDarkStatCard(
+      {required String label,
+      required String value,
+      required IconData icon}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _isOnline
-            ? Colors.green.withValues(alpha: 0.20)
-            : Colors.amber.withValues(alpha: 0.20),
-        border: Border.all(
-          color: _isOnline
-              ? Colors.green.withValues(alpha: 0.35)
-              : Colors.amber.withValues(alpha: 0.35),
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color:
-                  _isOnline ? const Color(0xFF4ADE80) : const Color(0xFFFBBF24),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            _isOnline ? 'Online' : 'Offline',
-            style: TextStyle(
-              color:
-                  _isOnline ? const Color(0xFFBBF7D0) : const Color(0xFFFEF08A),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          Row(children: [
+            Icon(icon, color: Colors.white70, size: 15),
+            const SizedBox(width: 6),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500)),
+          ]),
+          const SizedBox(height: 8),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  height: 1.0)),
         ],
       ),
     );
   }
 
-  // ── Sync notice ──────────────────────────────────────────────────
+  // ── Sync notice ───────────────────────────────────────────────────
   Widget _buildSyncNotice() {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -279,18 +326,19 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Text(
               '⏳ $_pendingCount attendance record(s) pending sync',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF92400E)),
+              style:
+                  const TextStyle(fontSize: 13, color: Color(0xFF92400E)),
             ),
           ),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: _goToAttendance,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                color: AppColors.warning,
-                borderRadius: BorderRadius.circular(6),
-              ),
+                  color: AppColors.warning,
+                  borderRadius: BorderRadius.circular(6)),
               child: const Text('Sync Now',
                   style: TextStyle(
                       color: Colors.white,
@@ -303,196 +351,379 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Body ─────────────────────────────────────────────────────────
+  // ── Body ──────────────────────────────────────────────────────────
   Widget _buildBody() {
-    // Show loading until session is ready
     if (!_loaded) {
       return const Center(child: CircularProgressIndicator());
     }
-
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'QUICK ACTIONS',
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textMuted,
-                letterSpacing: 0.6),
-          ),
-          const SizedBox(height: 12),
-          // 2-column grid using Row + Expanded (avoids GridView sizing issues)
           Row(
             children: [
               Expanded(
-                child: _ActionCard(
-                  icon: '📋',
-                  label: 'Attendance\nCheck-In',
-                  sub: 'Log time in / out',
-                  onTap: _session != null ? _goToAttendance : null,
-                ),
-              ),
+                  child: _buildLightStatCard(
+                      label: 'Upcoming',
+                      value: _upcomingEvents.length.toString(),
+                      icon: Icons.access_time_rounded,
+                      iconColor: AppColors.primary)),
               const SizedBox(width: 12),
               Expanded(
-                child: _ActionCard(
-                  icon: '📊',
-                  label: 'My Records',
-                  sub: 'View history',
-                  onTap: () =>
-                      showToast(context, 'Coming soon!', type: ToastType.info),
-                ),
+                  child: _buildLightStatCard(
+                      label: 'Completed',
+                      value: _completedEvents.toString(),
+                      icon: Icons.check_circle_outline_rounded,
+                      iconColor: const Color(0xFF10B981))),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Upcoming Events',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textMain)),
+              TextButton(
+                onPressed: () => showToast(context, 'Coming soon!',
+                    type: ToastType.info),
+                style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                child: const Text('See all',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600)),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionCard(
-                  icon: '🔔',
-                  label: 'Alerts',
-                  sub: 'Notifications',
-                  onTap: () =>
-                      showToast(context, 'Coming soon!', type: ToastType.info),
-                ),
+          if (_upcomingEvents.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14)),
+              child: const Center(
+                child: Text('No upcoming events',
+                    style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ActionCard(
-                  icon: '👤',
-                  label: 'Profile',
-                  sub: 'Account settings',
-                  onTap: () =>
-                      showToast(context, 'Coming soon!', type: ToastType.info),
-                ),
-              ),
-            ],
-          ),
+            )
+          else
+            Column(
+                children: _upcomingEvents
+                    .map((e) => _buildEventCard(e))
+                    .toList()),
         ],
       ),
     );
   }
 
-  // ── Bottom nav ───────────────────────────────────────────────────
-  Widget _buildBottomNav() {
-    final items = <({IconData icon, String label})>[
-      (icon: Icons.home_rounded, label: 'Home'),
-      (icon: Icons.notifications_rounded, label: 'Alerts'),
-      (icon: Icons.person_rounded, label: 'Profile'),
-    ];
+  Widget _buildLightStatCard(
+      {required String label,
+      required String value,
+      required IconData icon,
+      required Color iconColor}) {
     return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, -2))
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: List.generate(items.length, (i) {
-            final sel = i == _selectedTab;
-            return Expanded(
-              child: InkWell(
-                onTap: () => setState(() => _selectedTab = i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(items[i].icon,
-                          color: sel ? AppColors.primary : AppColors.textMuted,
-                          size: 24),
-                      const SizedBox(height: 3),
-                      Text(items[i].label,
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: sel
-                                  ? AppColors.primary
-                                  : AppColors.textMuted)),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(value,
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: iconColor)),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w500)),
+          ]),
+        ],
       ),
     );
   }
-}
 
-// ── Action card widget ────────────────────────────────────────────
-class _ActionCard extends StatefulWidget {
-  final String icon, label, sub;
-  final VoidCallback? onTap;
-  const _ActionCard({
-    required this.icon,
-    required this.label,
-    required this.sub,
-    this.onTap,
-  });
-  @override
-  State<_ActionCard> createState() => _ActionCardState();
-}
+  Widget _buildEventCard(EventModel event) {
+    final parts = (event.eventDate ?? '').split(' ');
+    final month = parts.isNotEmpty ? parts[0].toUpperCase() : '';
+    final day = parts.length > 1 ? parts[1] : '';
 
-class _ActionCardState extends State<_ActionCard> {
-  bool _pressed = false;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 54,
+            decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(10)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(month,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5)),
+                const SizedBox(height: 2),
+                Text(day,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        height: 1.0)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(event.eventName,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textMain)),
+                const SizedBox(height: 5),
+                Row(children: [
+                  Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                          color: Color(0xFFE05C8A),
+                          shape: BoxShape.circle)),
+                  const SizedBox(width: 5),
+                  Text(
+                      event.host ??
+                          event.eventTime ??
+                          'No details',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                          fontWeight: FontWeight.w500)),
+                ]),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: _goToAttendance,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                  color: AppColors.bg,
+                  borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.arrow_forward_ios_rounded,
+                  size: 13, color: AppColors.textMuted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
+  // ── Tab: Events ───────────────────────────────────────────────────
+  Widget _buildEventsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('All Events',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textMain)),
+          const SizedBox(height: 16),
+          if (_upcomingEvents.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14)),
+              child: const Center(
+                child: Text('No events found',
+                    style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500)),
+              ),
+            )
+          else
+            Column(
+                children: _upcomingEvents
+                    .map((e) => _buildEventCard(e))
+                    .toList()),
+        ],
+      ),
+    );
+  }
+
+  // ── Tab: QR Code ──────────────────────────────────────────────────
+  Widget _buildQrTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('QR Code Scanner',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textMain)),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 40),
+            decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(Icons.qr_code_2_rounded,
+                    size: 64, color: AppColors.primary.withValues(alpha: 0.5)),
+                const SizedBox(height: 16),
+                const Text('QR Scanner',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textMain)),
+                const SizedBox(height: 8),
+                Text('Coming soon',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textMuted,
+                        fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Tab: Settings ─────────────────────────────────────────────────
+  Widget _buildSettingsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Settings',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textMain)),
+          const SizedBox(height: 16),
+          _buildSettingItem(
+              icon: Icons.person_outline_rounded,
+              label: 'Profile',
+              onTap: () => showToast(context, 'Coming soon!',
+                  type: ToastType.info)),
+          _buildSettingItem(
+              icon: Icons.notifications_outlined,
+              label: 'Notifications',
+              onTap: () => showToast(context, 'Coming soon!',
+                  type: ToastType.info)),
+          _buildSettingItem(
+              icon: Icons.info_outline_rounded,
+              label: 'About',
+              onTap: () => showToast(context, 'Coming soon!',
+                  type: ToastType.info)),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Logout'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingItem(
+      {required IconData icon,
+      required String label,
+      required VoidCallback onTap}) {
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap?.call();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.96 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        child: Container(
-          height: 120,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.07),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2))
-            ],
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(widget.icon, style: const TextStyle(fontSize: 30)),
-              const SizedBox(height: 8),
-              Text(
-                widget.label,
-                textAlign: TextAlign.center,
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 1))
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.primary, size: 22),
+            const SizedBox(width: 14),
+            Text(label,
                 style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textMain),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                widget.sub,
-                textAlign: TextAlign.center,
-                style:
-                    const TextStyle(fontSize: 11, color: AppColors.textMuted),
-              ),
-            ],
-          ),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMain)),
+            const Spacer(),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: AppColors.textMuted),
+          ],
         ),
       ),
     );
