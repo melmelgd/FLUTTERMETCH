@@ -145,9 +145,8 @@ class DatabaseService {
   }
 
   // ── Local accounts (from QR scan) ─────────────────────────────────
-  /// Upserts a scanned account. Called after every successful QR login.
+  /// Upserts the scanned account so it can be used for offline/manual login.
   static Future<void> saveLocalAccount(SessionModel session) async {
-    if (!session.fromQr) return;
     final db = await database;
     await db.insert(
       'accounts_local',
@@ -155,8 +154,8 @@ class DatabaseService {
         'user_id': session.userId,
         'first_name': session.firstName,
         'account_type': session.accountType,
-        'email': session.email,
-        'password_hash': session.passwordHash,
+        'email': session.email ?? '',
+        'password_hash': session.passwordHash ?? '',
         'access': session.access,
         'scanned_at': DateTime.now().toIso8601String(),
       },
@@ -164,10 +163,22 @@ class DatabaseService {
     );
   }
 
-  /// All locally stored QR accounts (for the offline login list).
+  /// All stored QR accounts, newest first.
   static Future<List<Map<String, dynamic>>> getLocalAccounts() async {
     final db = await database;
     return db.query('accounts_local', orderBy: 'scanned_at DESC');
+  }
+
+  /// Find one stored account by email (for manual email+password login).
+  static Future<Map<String, dynamic>?> getLocalAccountByEmail(
+      String email) async {
+    final db = await database;
+    final rows = await db.query(
+      'accounts_local',
+      where: 'email = ?',
+      whereArgs: [email.trim().toLowerCase()],
+    );
+    return rows.isEmpty ? null : rows.first;
   }
 
   static Future<void> deleteLocalAccount(int userId) async {

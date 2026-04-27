@@ -25,7 +25,6 @@ class SessionService {
   static Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_sessionKey);
-    // NOTE: We do NOT clear accounts_local (DatabaseService) on logout
-    // so the user can tap their saved account to re-login offline.
+    // accounts_local in SQLite is intentionally kept for offline re-login.
   }
 }

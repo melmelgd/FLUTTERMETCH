@@ -4,11 +4,9 @@ class SessionModel {
   final String firstName;
   final String accountType;
   final String access;
-
-  // ── Extra fields stored after QR scan ────────────────────────────
   final String? email;
-  final String? passwordHash;
-  final bool fromQr;
+  final String? passwordHash; // stored for offline re-login after QR scan
+  final bool fromQr; // true = originally came from a QR scan
 
   SessionModel({
     required this.userId,

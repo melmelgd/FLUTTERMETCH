@@ -4,15 +4,14 @@ import 'package:http/http.dart' as http;
 import '../models/event_model.dart';
 import '../models/attendance_record.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  ↓ Replace with your actual Hostinger domain
-//  Example: 'https://yourdomain.com/gateway/v1/attendance/post.php'
-// ─────────────────────────────────────────────────────────────────────────────
-const String kApiBase =
-    'https://paleturquoise-cheetah-627304.hostingersite.com/api/gateway/v1/attendance/post.php';
+// ── Base URLs ─────────────────────────────────────────────────────────────────
+const String _kBase =
+    'https://paleturquoise-cheetah-627304.hostingersite.com/api/gateway/v1';
 
-// ─── Response models ──────────────────────────────────────────────────────────
+const String kAttendanceUrl = '$_kBase/attendance/post.php';
+const String kLoginUrl = '$_kBase/auth/login.php';
 
+// ─────────────────────────────────────────────────────────────────────────────
 class ApiResult {
   final bool ok;
   final int statusCode;
@@ -55,15 +54,35 @@ class BulkSyncResult {
   });
 }
 
-// ─── Service ──────────────────────────────────────────────────────────────────
+// ── Login result ──────────────────────────────────────────────────────────────
+class LoginResult {
+  final bool ok;
+  final String? error;
+  final int? userId;
+  final String? firstName;
+  final String? accountType;
+  final String? access;
+  final String? email;
 
+  const LoginResult({
+    required this.ok,
+    this.error,
+    this.userId,
+    this.firstName,
+    this.accountType,
+    this.access,
+    this.email,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 class ApiService {
-  // ── Internal POST helper ─────────────────────────────────────────
+  // ── Internal POST helper (attendance endpoint) ────────────────────
   static Future<ApiResult> _post(Map<String, dynamic> payload) async {
     try {
       final res = await http
           .post(
-            Uri.parse(kApiBase),
+            Uri.parse(kAttendanceUrl),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
@@ -82,7 +101,6 @@ class ApiService {
         );
       }
 
-      // 409 = duplicate attendance — treated as ok
       final ok = data['status'] == 'success' || res.statusCode == 409;
       return ApiResult(
         ok: ok,
@@ -96,15 +114,55 @@ class ApiService {
     }
   }
 
-  // ── GET → fetch events list ───────────────────────────────────────
-  // Your post.php only handles POST, so events are fetched
-  // via a separate GET endpoint — update the URL below if needed.
+  // ── Login with email + password ───────────────────────────────────
+  // Calls login.php which does password_verify() server-side.
+  static Future<LoginResult> loginWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse(kLoginUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email, 'password': password}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {
+        return const LoginResult(
+            ok: false, error: 'Server returned an invalid response.');
+      }
+
+      if (data['status'] == 'success') {
+        final user = data['user'] as Map<String, dynamic>? ?? {};
+        return LoginResult(
+          ok: true,
+          userId: user['user_id'] as int?,
+          firstName: user['first_name'] as String?,
+          accountType: user['account_type'] as String?,
+          access: user['access'] as String?,
+          email: user['email'] as String?,
+        );
+      }
+
+      return LoginResult(
+        ok: false,
+        error: data['message'] as String? ?? 'Login failed.',
+      );
+    } catch (e) {
+      return LoginResult(ok: false, error: e.toString());
+    }
+  }
+
+  // ── Fetch events list ─────────────────────────────────────────────
   static Future<List<EventModel>> fetchEvents() async {
     try {
       final res = await http
-          .get(
-            Uri.parse(kApiBase.replaceAll('post.php', 'get.php')),
-          )
+          .get(Uri.parse(kAttendanceUrl.replaceAll('post.php', 'get.php')))
           .timeout(const Duration(seconds: 10));
       final body = jsonDecode(res.body) as Map<String, dynamic>;
       if (body['status'] == 'success' && body['events'] != null) {
@@ -117,8 +175,6 @@ class ApiService {
   }
 
   // ── POST: create_event ────────────────────────────────────────────
-  // Required by PHP: event_name, event_date, event_time
-  // Optional:        host, speaker
   static Future<ApiResult> createEvent(EventModel event) async {
     return _post({
       'action': 'create_event',
@@ -131,10 +187,6 @@ class ApiService {
   }
 
   // ── POST: submit_attendance ───────────────────────────────────────
-  // Required by PHP: attendee_name, attendance_status
-  // Optional:        attendee_code, department, event_id,
-  //                  event_data (offline), time_in, time_out,
-  //                  is_manual_entry
   static Future<ApiResult> submitAttendance(AttendanceRecord record) async {
     return _post({
       'action': 'submit_attendance',
@@ -145,16 +197,12 @@ class ApiService {
       'time_in': record.timeIn,
       'time_out': record.timeOut,
       'is_manual_entry': record.isManualEntry,
-      // event_id  → pass when event already exists in DB
-      // event_data → pass when created offline (PHP creates it on-the-fly)
       'event_id': record.eventId,
       'event_data': record.eventData,
     });
   }
 
   // ── POST: bulk_sync ───────────────────────────────────────────────
-  // Sends all pending local records in one request.
-  // PHP returns { status, summary: {total,success,errors}, results:[...] }
   static Future<BulkSyncResult?> bulkSync(
       List<AttendanceRecord> pending) async {
     if (pending.isEmpty) return null;
