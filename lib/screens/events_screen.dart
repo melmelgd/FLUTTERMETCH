@@ -6,6 +6,7 @@ import '../models/event_model.dart';
 import '../models/session_model.dart';
 import '../utils/app_colors.dart';
 import '../utils/toast_helper.dart';
+import 'new_event_screen.dart';
 import 'attendance_screen.dart';
 
 class EventsScreen extends StatefulWidget {
@@ -35,18 +36,8 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   void _loadEvents() {
-    // TODO: replace with real API / database fetch
-    final events = [
-      EventModel(
-        eventId: 1,
-        eventName: 'dxcvv',
-        eventDate: 'Apr 16',
-        eventTime: '10:00 AM',
-        eventLocation: 'xvxv',
-        attendeeCount: 0,
-        status: 'upcoming',
-      ),
-    ];
+    // Initializing with an empty list as per user request to remove mock data
+    final events = <EventModel>[];
     setState(() {
       _allEvents = events;
       _filtered = events;
@@ -175,9 +166,14 @@ class _EventsScreenState extends State<EventsScreen> {
               ),
               // Gold "+" button
               GestureDetector(
-                onTap: () =>
-                    showToast(context, 'Add event — coming soon!',
-                        type: ToastType.info),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NewEventScreen(session: widget.session),
+                    ),
+                  );
+                },
                 child: Container(
                   width: 42,
                   height: 42,
