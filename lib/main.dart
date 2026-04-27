@@ -234,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             account: a,
                             onTap: _loading ? null : () => _loginFromStored(a),
                           ))
-                      .toList(),
+                      ,
                 ],
 
                 // ── Manual fallback ───────────────────────────────

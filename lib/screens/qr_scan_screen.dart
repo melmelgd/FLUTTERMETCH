@@ -76,7 +76,7 @@ class _QrScanScreenState extends State<QrScanScreen>
         _fail('QR is not a valid LGU JSON object.');
         return;
       }
-      final json = Map<String, dynamic>.from(decoded as Map);
+      final json = Map<String, dynamic>.from(decoded);
 
       // ── Parse user_id — PHP may emit int or string ──────────────
       final rawId = json['user_id'];
