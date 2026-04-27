@@ -4,14 +4,11 @@ import 'package:flutter/material.dart';
 import '../models/event_model.dart';
 import '../models/session_model.dart';
 import '../utils/app_colors.dart';
-import '../widgets/bottom_nav_bar.dart';
 import 'attendance_screen.dart';
 import 'new_event_screen.dart';
 import '../services/database_service.dart';
 import '../utils/toast_helper.dart';
 import 'qr_scanner_screen.dart';
-import 'settings_screen.dart';
-import 'home_screen.dart';
 
 class AllEventsScreen extends StatefulWidget {
   final SessionModel? session;
@@ -104,15 +101,18 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                     icon: Icons.edit_note_rounded,
                     label: 'Manual Entry',
                     color: const Color(0xFF1B2D5B),
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(context);
-                      Navigator.push(
+                      final result = await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) =>
                               NewEventScreen(session: widget.session),
                         ),
                       );
+                      if (result == true) {
+                        _loadEvents();
+                      }
                     },
                   ),
                 ),
@@ -492,8 +492,8 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                 icon: Icons.edit_outlined,
                 label: 'Edit',
                 color: AppColors.textMuted,
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => NewEventScreen(
@@ -502,6 +502,9 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                       ),
                     ),
                   );
+                  if (result == true) {
+                    _loadEvents();
+                  }
                 },
               ),
               _buildActionDivider(),
@@ -514,8 +517,10 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          AttendanceScreen(session: widget.session!),
+                      builder: (_) => AttendanceScreen(
+                        session: widget.session!,
+                        initialEvent: event,
+                      ),
                     ),
                   );
                 },
@@ -594,11 +599,24 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     );
 
     if (confirm == true && mounted) {
-      setState(() {
-        _allEvents.removeWhere((e) => e.eventId == event.eventId);
-        _filteredEvents.removeWhere((e) => e.eventId == event.eventId);
-      });
-      // TODO: also delete from DB
+      try {
+        if (event.eventId != null) {
+          await DatabaseService.deleteEvent(event.eventId!);
+          setState(() {
+            _allEvents.removeWhere((e) => e.eventId == event.eventId);
+            _filteredEvents.removeWhere((e) => e.eventId == event.eventId);
+          });
+          if (mounted) {
+            showToast(context, 'Event deleted successfully',
+                type: ToastType.success);
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          showToast(context, 'Failed to delete event: $e',
+              type: ToastType.error);
+        }
+      }
     }
   }
 }

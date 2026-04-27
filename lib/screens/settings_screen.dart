@@ -69,73 +69,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Profile card ──────────────────────────────
-                  _buildProfileCard(),
-                  const SizedBox(height: 28),
+    final canPop = Navigator.of(context).canPop();
+    final content = Column(
+      children: [
+        _buildHeader(),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Profile card ──────────────────────────────
+                _buildProfileCard(),
+                const SizedBox(height: 28),
 
-                  // ── Preferences section ───────────────────────
-                  _buildSectionLabel('PREFERENCES'),
-                  const SizedBox(height: 10),
-                  _buildToggleItem(
-                    icon: Icons.notifications_outlined,
-                    iconColor: const Color(0xFFF5A623),
-                    label: 'Notifications',
-                    value: _notificationsEnabled,
-                    onChanged: (v) =>
-                        setState(() => _notificationsEnabled = v),
-                  ),
-                  const SizedBox(height: 2),
-                  _buildToggleItem(
-                    icon: Icons.wb_sunny_outlined,
-                    iconColor: const Color(0xFFF5A623),
-                    label: 'Dark Mode',
-                    value: _darkModeEnabled,
-                    onChanged: (v) =>
-                        setState(() => _darkModeEnabled = v),
-                  ),
+                // ── Preferences section ───────────────────────
+                _buildSectionLabel('PREFERENCES'),
+                const SizedBox(height: 10),
+                _buildToggleItem(
+                  icon: Icons.notifications_outlined,
+                  iconColor: const Color(0xFFF5A623),
+                  label: 'Notifications',
+                  value: _notificationsEnabled,
+                  onChanged: (v) => setState(() => _notificationsEnabled = v),
+                ),
+                const SizedBox(height: 2),
+                _buildToggleItem(
+                  icon: Icons.wb_sunny_outlined,
+                  iconColor: const Color(0xFFF5A623),
+                  label: 'Dark Mode',
+                  value: _darkModeEnabled,
+                  onChanged: (v) => setState(() => _darkModeEnabled = v),
+                ),
 
-                  const SizedBox(height: 28),
+                const SizedBox(height: 28),
 
-                  // ── About section ─────────────────────────────
-                  _buildSectionLabel('ABOUT'),
-                  const SizedBox(height: 10),
-                  _buildNavItem(
-                    icon: Icons.shield_outlined,
-                    iconColor: AppColors.primary,
-                    label: 'Privacy Policy',
-                    onTap: () {
-                      // TODO: open privacy policy
-                    },
-                  ),
-                  const SizedBox(height: 2),
-                  _buildAppVersionItem(),
+                // ── About section ─────────────────────────────
+                _buildSectionLabel('ABOUT'),
+                const SizedBox(height: 10),
+                _buildNavItem(
+                  icon: Icons.shield_outlined,
+                  iconColor: AppColors.primary,
+                  label: 'Privacy Policy',
+                  onTap: () {
+                    // TODO: open privacy policy
+                  },
+                ),
+                const SizedBox(height: 2),
+                _buildAppVersionItem(),
 
-                  const SizedBox(height: 28),
+                const SizedBox(height: 28),
 
-                  // ── Sign Out ──────────────────────────────────
-                  _buildSignOutButton(),
-                ],
-              ),
+                // ── Sign Out ──────────────────────────────────
+                _buildSignOutButton(),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+
+    if (!canPop) {
+      return Material(
+        color: AppColors.bg,
+        child: content,
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: content,
     );
   }
 
   // ── Header ──────────────────────────────────────────────────────
   Widget _buildHeader() {
+    final canPop = Navigator.of(context).canPop();
     return Container(
       decoration: const BoxDecoration(gradient: AppColors.headerGradient),
       padding: EdgeInsets.fromLTRB(
@@ -146,6 +155,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       child: Row(
         children: [
+          if (canPop) ...[
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -458,12 +486,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFFECACA)),
         ),
-        child: Row(
+        child: const Row(
           children: [
-            const Icon(Icons.logout_rounded,
+            Icon(Icons.logout_rounded,
                 color: Color(0xFFEF4444), size: 20),
-            const SizedBox(width: 12),
-            const Text(
+            SizedBox(width: 12),
+            Text(
               'Sign Out',
               style: TextStyle(
                 fontSize: 15,

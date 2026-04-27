@@ -120,7 +120,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
           ),
 
           // ── Dark overlay with cutout ──────────────────────────────
-          _ScannerOverlay(),
+          const _ScannerOverlay(),
 
           // ── Top bar ───────────────────────────────────────────────
           SafeArea(
