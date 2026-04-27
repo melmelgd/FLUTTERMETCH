@@ -7,8 +7,10 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'models/session_model.dart';
 import 'screens/home_screen.dart';
 import 'services/session_service.dart';
+import 'services/theme_service.dart';
 import 'utils/app_colors.dart';
 import 'utils/toast_helper.dart';
+import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +31,12 @@ void main() async {
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  runApp(const LguMobileApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeService(),
+      child: const LguMobileApp(),
+    ),
+  );
 }
 
 class LguMobileApp extends StatelessWidget {
@@ -37,9 +44,11 @@ class LguMobileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeService = Provider.of<ThemeService>(context);
     return MaterialApp(
       title: 'Ormoc LGU',
       debugShowCheckedModeBanner: false,
+      themeMode: themeService.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -47,6 +56,14 @@ class LguMobileApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         scaffoldBackgroundColor: AppColors.bg,
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: const Color(0xFF0F172A),
       ),
       home: const AppRouter(),
     );

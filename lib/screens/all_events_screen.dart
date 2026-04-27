@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import '../models/event_model.dart';
 import '../models/session_model.dart';
 import '../utils/app_colors.dart';
-import 'attendance_screen.dart';
 import 'new_event_screen.dart';
 import '../services/database_service.dart';
 import '../utils/toast_helper.dart';
 import 'qr_scanner_screen.dart';
+import 'event_detail_screen.dart';
+import '../models/attendance_record.dart';
+import 'package:intl/intl.dart';
 
 class AllEventsScreen extends StatefulWidget {
   final SessionModel? session;
@@ -526,7 +528,12 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                 label: 'View',
                 color: Colors.grey[600]!,
                 onTap: () {
-                  // TODO: navigate to event detail
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EventDetailScreen(event: event),
+                    ),
+                  );
                 },
               ),
               const SizedBox(width: 8),
@@ -556,15 +563,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                 color: const Color(0xFF10B981),
                 onTap: () {
                   if (widget.session == null) return;
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AttendanceScreen(
-                        session: widget.session!,
-                        initialEvent: event,
-                      ),
-                    ),
-                  );
+                  _showAttendOptions(event);
                 },
               ),
               const SizedBox(width: 8),
@@ -619,6 +618,168 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
         ),
       ),
     );
+  }
+
+  void _showAttendOptions(EventModel event) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Attendance: ${event.eventName}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textMain,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'How would you like to record attendance?',
+              style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionBtn(
+                    icon: Icons.person_add_alt_1_rounded,
+                    label: 'Manual Input',
+                    color: const Color(0xFF1B2D5B),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showManualAttendanceDialog(event);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildActionBtn(
+                    icon: Icons.qr_code_scanner_rounded,
+                    label: 'Scan QR',
+                    color: const Color(0xFF10B981),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => QrScannerScreen(
+                            onScanned: (code) async {
+                              _recordAttendance(event, code, 'QR Scanned');
+                              return true;
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showManualAttendanceDialog(EventModel event) {
+    final nameCtrl = TextEditingController();
+    final idCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Manual Attendance', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Attendee Name',
+                hintText: 'Enter full name',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: idCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Attendee ID / Code',
+                hintText: 'Enter ID number',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameCtrl.text.isNotEmpty && idCtrl.text.isNotEmpty) {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+                _recordAttendance(event, idCtrl.text, nameCtrl.text);
+              } else {
+                showToast(context, 'Please fill all fields', type: ToastType.warning);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1B2D5B),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _recordAttendance(EventModel event, String code, String name) async {
+    final now = DateTime.now();
+    final record = AttendanceRecord(
+      attendeeName: name,
+      attendeeCode: code,
+      department: 'N/A',
+      attendanceStatus: 'present',
+      timeIn: DateFormat('HH:mm').format(now),
+      eventId: event.eventId,
+      eventName: event.eventName,
+      eventDate: event.eventDate,
+      checkinType: 'in',
+      timestamp: now.toIso8601String(),
+      synced: false,
+    );
+
+    await DatabaseService.addRecord(record);
+    if (mounted) {
+      showToast(context, 'Attendance recorded for $name', type: ToastType.success);
+    }
   }
 
   Future<void> _confirmDelete(EventModel event) async {
