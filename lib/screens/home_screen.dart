@@ -1,6 +1,4 @@
-// lib/screens/home_screen.dart — FULL FIXED FILE
-// Fix: removed FadeTransition (was causing blank body), simplified animation
-
+// lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/session_model.dart';
@@ -13,6 +11,7 @@ import 'attendance_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -40,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _loaded = true;
     });
     await _checkPending();
-
     Connectivity().onConnectivityChanged.listen((r) {
       if (!mounted) return;
       setState(() => _isOnline = r != ConnectivityResult.none);
@@ -58,7 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Logout'),
-        content: const Text('Are you sure you want to log out?'),
+        content: const Text(
+            'Log out? Your QR credential stays saved so you can log in again without scanning.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -107,7 +106,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Header ───────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       decoration: const BoxDecoration(gradient: AppColors.headerGradient),
@@ -177,21 +175,50 @@ class _HomeScreenState extends State<HomeScreen> {
                             fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 6),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.20),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 3),
-                        child: Text(
-                          (_session?.accountType ?? '').toUpperCase(),
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5),
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.20),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            child: Text(
+                              (_session?.accountType ?? '').toUpperCase(),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5),
+                            ),
+                          ),
+                          if (_session?.fromQr == true) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF065F46)
+                                    .withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.qr_code_rounded,
+                                      color: Color(0xFF6EE7B7), size: 11),
+                                  SizedBox(width: 3),
+                                  Text('QR Verified',
+                                      style: TextStyle(
+                                          color: Color(0xFF6EE7B7),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -264,7 +291,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Sync notice ──────────────────────────────────────────────────
   Widget _buildSyncNotice() {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -303,13 +329,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Body ─────────────────────────────────────────────────────────
   Widget _buildBody() {
-    // Show loading until session is ready
     if (!_loaded) {
       return const Center(child: CircularProgressIndicator());
     }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -324,7 +347,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 letterSpacing: 0.6),
           ),
           const SizedBox(height: 12),
-          // 2-column grid using Row + Expanded (avoids GridView sizing issues)
           Row(
             children: [
               Expanded(
@@ -376,7 +398,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Bottom nav ───────────────────────────────────────────────────
   Widget _buildBottomNav() {
     final items = <({IconData icon, String label})>[
       (icon: Icons.home_rounded, label: 'Home'),
@@ -429,16 +450,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ── Action card widget ────────────────────────────────────────────
 class _ActionCard extends StatefulWidget {
   final String icon, label, sub;
   final VoidCallback? onTap;
-  const _ActionCard({
-    required this.icon,
-    required this.label,
-    required this.sub,
-    this.onTap,
-  });
+
+  const _ActionCard(
+      {required this.icon, required this.label, required this.sub, this.onTap});
+
   @override
   State<_ActionCard> createState() => _ActionCardState();
 }
@@ -476,21 +494,17 @@ class _ActionCardState extends State<_ActionCard> {
             children: [
               Text(widget.icon, style: const TextStyle(fontSize: 30)),
               const SizedBox(height: 8),
-              Text(
-                widget.label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textMain),
-              ),
+              Text(widget.label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textMain)),
               const SizedBox(height: 3),
-              Text(
-                widget.sub,
-                textAlign: TextAlign.center,
-                style:
-                    const TextStyle(fontSize: 11, color: AppColors.textMuted),
-              ),
+              Text(widget.sub,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textMuted)),
             ],
           ),
         ),

@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/attendance_record.dart';
 import '../models/event_model.dart';
+import '../models/session_model.dart';
 
 class DatabaseService {
   static Database? _db;
@@ -16,46 +17,66 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'attendance_user.db'),
-      version: 1,
-      onCreate: (db, _) async {
-        await db.execute('''
-          CREATE TABLE records (
-            local_id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            attendee_name     TEXT,
-            attendee_code     TEXT,
-            department        TEXT,
-            attendance_status TEXT DEFAULT 'present',
-            time_in           TEXT,
-            time_out          TEXT,
-            is_manual_entry   INTEGER DEFAULT 1,
-            event_id          INTEGER,
-            event_data        TEXT,
-            event_name        TEXT,
-            event_date        TEXT,
-            checkin_type      TEXT DEFAULT 'in',
-            timestamp         TEXT,
-            synced            INTEGER DEFAULT 0,
-            sync_error        TEXT
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE events_cache (
-            event_id   INTEGER PRIMARY KEY,
-            event_name TEXT,
-            event_date TEXT,
-            event_time TEXT,
-            host       TEXT,
-            speaker    TEXT
-          )
-        ''');
+      version: 2,
+      onCreate: (db, _) => _createAll(db),
+      onUpgrade: (db, oldV, __) async {
+        if (oldV < 2) await _addAccountsLocal(db);
       },
     );
   }
 
+  static Future<void> _createAll(Database db) async {
+    await db.execute('''
+      CREATE TABLE records (
+        local_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        attendee_name     TEXT,
+        attendee_code     TEXT,
+        department        TEXT,
+        attendance_status TEXT DEFAULT 'present',
+        time_in           TEXT,
+        time_out          TEXT,
+        is_manual_entry   INTEGER DEFAULT 1,
+        event_id          INTEGER,
+        event_data        TEXT,
+        event_name        TEXT,
+        event_date        TEXT,
+        checkin_type      TEXT DEFAULT 'in',
+        timestamp         TEXT,
+        synced            INTEGER DEFAULT 0,
+        sync_error        TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE events_cache (
+        event_id   INTEGER PRIMARY KEY,
+        event_name TEXT,
+        event_date TEXT,
+        event_time TEXT,
+        host       TEXT,
+        speaker    TEXT
+      )
+    ''');
+    await _addAccountsLocal(db);
+  }
+
+  static Future<void> _addAccountsLocal(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS accounts_local (
+        user_id        INTEGER PRIMARY KEY,
+        first_name     TEXT,
+        account_type   TEXT,
+        email          TEXT,
+        password_hash  TEXT,
+        access         TEXT,
+        scanned_at     TEXT
+      )
+    ''');
+  }
+
+  // ── Attendance records ─────────────────────────────────────────────
   static Future<int> addRecord(AttendanceRecord record) async {
     final db = await database;
-    final map = record.toDbMap();
-    map.remove('local_id');
+    final map = record.toDbMap()..remove('local_id');
     return db.insert('records', map);
   }
 
@@ -88,6 +109,7 @@ class DatabaseService {
     await db.delete('records');
   }
 
+  // ── Events cache ───────────────────────────────────────────────────
   static Future<void> cacheEvents(List<EventModel> events) async {
     final db = await database;
     final batch = db.batch();
@@ -120,5 +142,37 @@ class DatabaseService {
               speaker: r['speaker'] as String?,
             ))
         .toList();
+  }
+
+  // ── Local accounts (from QR scan) ─────────────────────────────────
+  /// Upserts a scanned account. Called after every successful QR login.
+  static Future<void> saveLocalAccount(SessionModel session) async {
+    if (!session.fromQr) return;
+    final db = await database;
+    await db.insert(
+      'accounts_local',
+      {
+        'user_id': session.userId,
+        'first_name': session.firstName,
+        'account_type': session.accountType,
+        'email': session.email,
+        'password_hash': session.passwordHash,
+        'access': session.access,
+        'scanned_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// All locally stored QR accounts (for the offline login list).
+  static Future<List<Map<String, dynamic>>> getLocalAccounts() async {
+    final db = await database;
+    return db.query('accounts_local', orderBy: 'scanned_at DESC');
+  }
+
+  static Future<void> deleteLocalAccount(int userId) async {
+    final db = await database;
+    await db
+        .delete('accounts_local', where: 'user_id = ?', whereArgs: [userId]);
   }
 }
