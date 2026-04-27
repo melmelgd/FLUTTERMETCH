@@ -360,7 +360,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          Text('Good day! 👋',
+          Text('Good day!',
               style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.75),
                   fontSize: 13,
