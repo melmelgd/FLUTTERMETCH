@@ -10,6 +10,7 @@ import '../utils/app_colors.dart';
 import '../utils/toast_helper.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../main.dart';
+import 'new_event_screen.dart';
 import 'attendance_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -113,7 +114,116 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onFabPressed() {
-    showToast(context, 'Add event — coming soon!', type: ToastType.info);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Create New Event',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textMain,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Select how you want to add the event',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionBtn(
+                    icon: Icons.edit_note_rounded,
+                    label: 'Manual Entry',
+                    color: const Color(0xFF1B2D5B),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NewEventScreen(session: _session),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildActionBtn(
+                    icon: Icons.qr_code_scanner_rounded,
+                    label: 'QR Scan',
+                    color: const Color(0xFFF5A623),
+                    onTap: () {
+                      Navigator.pop(context);
+                      showToast(context, 'QR Scanner coming soon!',
+                          type: ToastType.info);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String get _userInitial {
@@ -145,23 +255,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTabContent() {
-    if (!_loaded) {
-      return const Center(child: CircularProgressIndicator());
-    }
     switch (_selectedTab) {
       case 0:
-        return _buildBody(); // Home
-      case 1:
-        return _buildEventsTab(); // Events
-      case 2:
-        return _buildQrTab(); // QR Code
-      case 3:
-        return _buildSettingsTab(); // Settings
-      default:
         return _buildBody();
+      case 1:
+        return Center(
+          child: Text('Settings coming soon!',
+              style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontWeight: FontWeight.w500)),
+        );
+      default:
+        return const SizedBox.shrink();
     }
   }
-
   // ── Header ────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
@@ -558,133 +665,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(8)),
               child: const Icon(Icons.arrow_forward_ios_rounded,
                   size: 13, color: AppColors.textMuted),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Tab: Events ───────────────────────────────────────────────────
-  Widget _buildEventsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('All Events',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textMain)),
-          const SizedBox(height: 16),
-          if (_upcomingEvents.isEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14)),
-              child: const Center(
-                child: Text('No events found',
-                    style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500)),
-              ),
-            )
-          else
-            Column(
-                children: _upcomingEvents
-                    .map((e) => _buildEventCard(e))
-                    .toList()),
-        ],
-      ),
-    );
-  }
-
-  // ── Tab: QR Code ──────────────────────────────────────────────────
-  Widget _buildQrTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('QR Code Scanner',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textMain)),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 40),
-            decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(Icons.qr_code_2_rounded,
-                    size: 64, color: AppColors.primary.withValues(alpha: 0.5)),
-                const SizedBox(height: 16),
-                const Text('QR Scanner',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textMain)),
-                const SizedBox(height: 8),
-                Text('Coming soon',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Tab: Settings ─────────────────────────────────────────────────
-  Widget _buildSettingsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Settings',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textMain)),
-          const SizedBox(height: 16),
-          _buildSettingItem(
-              icon: Icons.person_outline_rounded,
-              label: 'Profile',
-              onTap: () => showToast(context, 'Coming soon!',
-                  type: ToastType.info)),
-          _buildSettingItem(
-              icon: Icons.notifications_outlined,
-              label: 'Notifications',
-              onTap: () => showToast(context, 'Coming soon!',
-                  type: ToastType.info)),
-          _buildSettingItem(
-              icon: Icons.info_outline_rounded,
-              label: 'About',
-              onTap: () => showToast(context, 'Coming soon!',
-                  type: ToastType.info)),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _logout,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Logout'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.danger,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
             ),
           ),
         ],
