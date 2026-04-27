@@ -10,8 +10,11 @@ import '../utils/app_colors.dart';
 import '../utils/toast_helper.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../main.dart';
+import 'all_events_screen.dart';
 import 'new_event_screen.dart';
 import 'attendance_screen.dart';
+import 'settings_screen.dart';
+import 'qr_scanner_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -56,19 +59,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadEvents() async {
+    final cached = await DatabaseService.getCachedEvents();
     if (!mounted) return;
     setState(() {
-      _totalEvents = 1;
-      _completedEvents = 0;
-      _totalAttendees = 0;
-      _upcomingEvents = [
-        EventModel(
-          eventId: 1,
-          eventName: 'dxcvv',
-          eventDate: 'Apr 16',
-          eventTime: '10:00 AM',
-        )
-      ];
+      _totalEvents = cached.length;
+      _completedEvents = 0; // Logic for completed could be added later
+      _totalAttendees = 0; // Total attendees across events
+      _upcomingEvents = cached;
     });
   }
 
@@ -178,8 +175,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: const Color(0xFFF5A623),
                     onTap: () {
                       Navigator.pop(context);
-                      showToast(context, 'QR Scanner coming soon!',
-                          type: ToastType.info);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => QrScannerScreen(
+                            onScanned: (code) async {
+                              showToast(context, 'Scanned: $code',
+                                  type: ToastType.success);
+                              return true;
+                            },
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -259,14 +266,18 @@ class _HomeScreenState extends State<HomeScreen> {
       case 0:
         return _buildBody();
       case 1:
-        return Center(
-          child: Text('Settings coming soon!',
-              style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontWeight: FontWeight.w500)),
+        return AllEventsScreen(session: _session);
+      case 2:
+        return QrScannerScreen(
+          onScanned: (code) async {
+            showToast(context, 'Scanned: $code', type: ToastType.success);
+            return false;
+          },
         );
+      case 3:
+        return SettingsScreen(session: _session);
       default:
-        return const SizedBox.shrink();
+        return _buildBody();
     }
   }
   // ── Header ────────────────────────────────────────────────────────
@@ -495,8 +506,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.w700,
                       color: AppColors.textMain)),
               TextButton(
-                onPressed: () => showToast(context, 'Coming soon!',
-                    type: ToastType.info),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AllEventsScreen(session: _session),
+                  ),
+                ),
                 style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,

@@ -2,12 +2,14 @@
 // New Event screen — matches UI screenshots provided
 
 import 'package:flutter/material.dart';
+import '../models/event_model.dart';
 import '../models/session_model.dart';
 import '../utils/app_colors.dart';
 
 class NewEventScreen extends StatefulWidget {
   final SessionModel? session;
-  const NewEventScreen({super.key, this.session});
+  final EventModel? existingEvent;
+  const NewEventScreen({super.key, this.session, this.existingEvent});
 
   @override
   State<NewEventScreen> createState() => _NewEventScreenState();
@@ -26,6 +28,16 @@ class _NewEventScreenState extends State<NewEventScreen> {
 
   String _category = 'Meeting';
   String _status = 'Upcoming';
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existingEvent != null) {
+      _titleCtrl.text = widget.existingEvent!.eventName;
+      // You can populate other fields here if EventModel has them
+      // e.g. _orgCtrl.text = widget.existingEvent!.host ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -516,6 +528,7 @@ class _NewEventScreenState extends State<NewEventScreen> {
   }
 
   Widget _buildCreateButton() {
+    final isEdit = widget.existingEvent != null;
     return SizedBox(
       width: double.infinity,
       child: Container(
@@ -531,12 +544,12 @@ class _NewEventScreenState extends State<NewEventScreen> {
         ),
         child: ElevatedButton.icon(
           onPressed: () {
-            // Implement create logic
+            // Implement create/save logic
             Navigator.pop(context);
           },
-          icon: const Icon(Icons.assignment_turned_in_outlined, size: 20),
-          label: const Text('Create Event',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          icon: Icon(isEdit ? Icons.save_outlined : Icons.assignment_turned_in_outlined, size: 20),
+          label: Text(isEdit ? 'Save Changes' : 'Create Event',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF1B2D5B),
             foregroundColor: Colors.white,
