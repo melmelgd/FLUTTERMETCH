@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../models/session_model.dart';
 import '../models/event_model.dart';
 import '../services/session_service.dart';
@@ -102,12 +104,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _goToAttendance() async {
+  Future<void> _goToAttendance({EventModel? initialEvent}) async {
     if (_session == null) return;
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AttendanceScreen(session: _session!)),
+      MaterialPageRoute(
+          builder: (_) =>
+              AttendanceScreen(session: _session!, initialEvent: initialEvent)),
     );
     await _checkPending();
+    await _loadEvents(); // Reload in case new events were added via QR
   }
 
   void _onFabPressed() {
@@ -156,14 +161,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: Icons.edit_note_rounded,
                     label: 'Manual Entry',
                     color: const Color(0xFF1B2D5B),
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(context);
-                      Navigator.push(
+                      final result = await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => NewEventScreen(session: _session),
                         ),
                       );
+                      if (result == true) {
+                        _loadEvents();
+                      }
                     },
                   ),
                 ),
@@ -173,20 +181,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: Icons.qr_code_scanner_rounded,
                     label: 'QR Scan',
                     color: const Color(0xFFF5A623),
-                    onTap: () {
+                    onTap: () async {
                       Navigator.pop(context);
-                      Navigator.push(
+                      final result = await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => QrScannerScreen(
-                            onScanned: (code) async {
-                              showToast(context, 'Scanned: $code',
-                                  type: ToastType.success);
-                              return true;
-                            },
-                          ),
+                          builder: (_) => const QrScannerScreen(),
                         ),
                       );
+                      if (!mounted) return;
+                      if (result is String && result.isNotEmpty) {
+                        try {
+                          final data = jsonDecode(result);
+                          final ev = EventModel.fromJson(data);
+                          _goToAttendance(initialEvent: ev);
+                        } catch (_) {
+                          if (mounted) {
+                            showToast(context, 'Invalid QR data',
+                                type: ToastType.error);
+                          }
+                        }
+                      }
                     },
                   ),
                 ),
@@ -270,8 +285,17 @@ class _HomeScreenState extends State<HomeScreen> {
       case 2:
         return QrScannerScreen(
           onScanned: (code) async {
-            showToast(context, 'Scanned: $code', type: ToastType.success);
-            return false;
+            try {
+              final data = jsonDecode(code);
+              final ev = EventModel.fromJson(data);
+              await _goToAttendance(initialEvent: ev);
+              return false; // Don't pop when in tab
+            } catch (_) {
+              if (mounted) {
+                showToast(context, 'Invalid Event QR', type: ToastType.error);
+              }
+              return false;
+            }
           },
         );
       case 3:
@@ -595,9 +619,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEventCard(EventModel event) {
-    final parts = (event.eventDate ?? '').split(' ');
-    final month = parts.isNotEmpty ? parts[0].toUpperCase() : '';
-    final day = parts.length > 1 ? parts[1] : '';
+    String month = '';
+    String day = '';
+
+    try {
+      if (event.eventDate != null && event.eventDate!.isNotEmpty) {
+        final date = DateTime.parse(event.eventDate!);
+        month = DateFormat('MMM').format(date).toUpperCase();
+        day = date.day.toString();
+      }
+    } catch (_) {
+      // Fallback to old splitting if parsing fails
+      final parts = (event.eventDate ?? '').split(' ');
+      month = parts.isNotEmpty ? parts[0].toUpperCase() : '';
+      day = parts.length > 1 ? parts[1] : '';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -671,7 +707,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           GestureDetector(
-            onTap: _goToAttendance,
+            onTap: () => _goToAttendance(initialEvent: event),
             child: Container(
               width: 32,
               height: 32,
@@ -687,40 +723,5 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSettingItem(
-      {required IconData icon,
-      required String label,
-      required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 1))
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: AppColors.primary, size: 22),
-            const SizedBox(width: 14),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textMain)),
-            const Spacer(),
-            Icon(Icons.arrow_forward_ios_rounded,
-                size: 14, color: AppColors.textMuted),
-          ],
-        ),
-      ),
-    );
-  }
+  // Removed unused _buildSettingItem
 }

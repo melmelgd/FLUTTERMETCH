@@ -4,7 +4,10 @@
 import 'package:flutter/material.dart';
 import '../models/event_model.dart';
 import '../models/session_model.dart';
+import '../services/database_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/toast_helper.dart';
+import 'package:intl/intl.dart';
 
 class NewEventScreen extends StatefulWidget {
   final SessionModel? session;
@@ -467,7 +470,11 @@ class _NewEventScreenState extends State<NewEventScreen> {
         );
         if (picked != null) {
           setState(() {
-            if (isStart) _startTime = picked; else _endTime = picked;
+            if (isStart) {
+              _startTime = picked;
+            } else {
+              _endTime = picked;
+            }
           });
         }
       },
@@ -543,13 +550,15 @@ class _NewEventScreenState extends State<NewEventScreen> {
           ],
         ),
         child: ElevatedButton.icon(
-          onPressed: () {
-            // Implement create/save logic
-            Navigator.pop(context);
-          },
-          icon: Icon(isEdit ? Icons.save_outlined : Icons.assignment_turned_in_outlined, size: 20),
+          onPressed: _onSavePressed,
+          icon: Icon(
+              isEdit
+                  ? Icons.save_outlined
+                  : Icons.assignment_turned_in_outlined,
+              size: 20),
           label: Text(isEdit ? 'Save Changes' : 'Create Event',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF1B2D5B),
             foregroundColor: Colors.white,
@@ -561,5 +570,56 @@ class _NewEventScreenState extends State<NewEventScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _onSavePressed() async {
+    final title = _titleCtrl.text.trim();
+    final loc = _locCtrl.text.trim();
+
+    if (title.isEmpty) {
+      showToast(context, 'Please enter an event title', type: ToastType.error);
+      return;
+    }
+    if (_selectedDate == null) {
+      showToast(context, 'Please select an event date', type: ToastType.error);
+      return;
+    }
+    if (loc.isEmpty) {
+      showToast(context, 'Please enter a location', type: ToastType.error);
+      return;
+    }
+
+    final dateStr = DateFormat('MMMM dd, yyyy').format(_selectedDate!);
+    final startTimeStr =
+        _startTime != null ? _startTime!.format(context) : 'No time';
+
+    final event = EventModel(
+      eventId: widget.existingEvent?.eventId,
+      eventName: title,
+      eventDate: dateStr,
+      eventTime: startTimeStr,
+      host: _orgCtrl.text.trim().isEmpty ? 'None' : _orgCtrl.text.trim(),
+      speaker: _descCtrl.text.trim().isEmpty ? 'None' : _descCtrl.text.trim(),
+      eventLocation: loc,
+      status: _status.toLowerCase(),
+      attendeeCount: int.tryParse(_maxAttendeesCtrl.text) ?? 0,
+    );
+
+    try {
+      await DatabaseService.saveEvent(event);
+      if (mounted) {
+        showToast(
+            context,
+            widget.existingEvent != null
+                ? 'Event updated successfully!'
+                : 'Event created successfully!',
+            type: ToastType.success);
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        showToast(context, 'Failed to save event: $e', type: ToastType.error);
+      }
+    }
   }
 }

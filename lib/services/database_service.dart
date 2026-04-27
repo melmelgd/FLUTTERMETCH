@@ -1,6 +1,8 @@
 // lib/services/database_service.dart
-import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:flutter/foundation.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import '../models/attendance_record.dart';
 import '../models/event_model.dart';
 
@@ -13,11 +15,20 @@ class DatabaseService {
   }
 
   static Future<Database> _open() async {
+    if (kIsWeb) {
+      databaseFactory = databaseFactoryFfiWeb;
+    } else if (defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      databaseFactory = databaseFactoryFfi;
+    }
+
     final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'attendance_user.db');
     return openDatabase(
-      join(dbPath, 'attendance_user.db'),
-      version: 1,
-      onCreate: (db, _) async {
+      path,
+      version: 2,
+      onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE records (
             local_id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,16 +51,58 @@ class DatabaseService {
         ''');
         await db.execute('''
           CREATE TABLE events_cache (
-            event_id   INTEGER PRIMARY KEY,
+            event_id   INTEGER PRIMARY KEY AUTOINCREMENT,
             event_name TEXT,
             event_date TEXT,
             event_time TEXT,
             host       TEXT,
-            speaker    TEXT
+            speaker    TEXT,
+            event_location TEXT,
+            attendee_count INTEGER DEFAULT 0,
+            status         TEXT DEFAULT 'upcoming'
           )
         ''');
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add missing columns to events_cache
+          try {
+            await db.execute('ALTER TABLE events_cache ADD COLUMN event_location TEXT');
+            await db.execute('ALTER TABLE events_cache ADD COLUMN attendee_count INTEGER DEFAULT 0');
+            await db.execute('ALTER TABLE events_cache ADD COLUMN status TEXT DEFAULT "upcoming"');
+          } catch (e) {
+            // Columns might already exist
+          }
+        }
+      },
     );
+  }
+
+  static Future<int> saveEvent(EventModel event) async {
+    final db = await database;
+    final map = {
+      'event_name': event.eventName,
+      'event_date': event.eventDate,
+      'event_time': event.eventTime,
+      'host': event.host,
+      'speaker': event.speaker,
+      'event_location': event.eventLocation,
+      'attendee_count': event.attendeeCount ?? 0,
+      'status': event.status ?? 'upcoming',
+    };
+
+    if (event.eventId != null) {
+      map['event_id'] = event.eventId;
+      return db.insert('events_cache', map,
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    } else {
+      return db.insert('events_cache', map);
+    }
+  }
+
+  static Future<int> deleteEvent(int eventId) async {
+    final db = await database;
+    return db.delete('events_cache', where: 'event_id = ?', whereArgs: [eventId]);
   }
 
   static Future<int> addRecord(AttendanceRecord record) async {
@@ -118,6 +171,9 @@ class DatabaseService {
               eventTime: r['event_time'] as String?,
               host: r['host'] as String?,
               speaker: r['speaker'] as String?,
+              eventLocation: r['event_location'] as String?,
+              attendeeCount: r['attendee_count'] as int?,
+              status: r['status'] as String?,
             ))
         .toList();
   }

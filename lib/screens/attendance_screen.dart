@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../models/session_model.dart';
 import '../models/event_model.dart';
 import '../models/attendance_record.dart';
@@ -9,6 +10,7 @@ import '../services/database_service.dart';
 import '../services/api_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/toast_helper.dart';
+import 'qr_scanner_screen.dart';
 
 enum CheckinStep { event, confirm, success }
 
@@ -18,7 +20,8 @@ enum SubmitMode { online, offline, duplicate, apiError, netError }
 
 class AttendanceScreen extends StatefulWidget {
   final SessionModel session;
-  const AttendanceScreen({super.key, required this.session});
+  final EventModel? initialEvent;
+  const AttendanceScreen({super.key, required this.session, this.initialEvent});
   @override
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
@@ -49,6 +52,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialEvent != null) {
+      _selectedEvent = widget.initialEvent;
+    }
     _init();
   }
 
@@ -256,6 +262,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       // ← This ALWAYS runs — spinner always stops
       if (mounted) {
         setState(() => _submitting = false);
+      }
+    }
+  }
+
+  Future<void> _scanEventQr() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+    );
+    if (result is String && result.isNotEmpty) {
+      try {
+        final data = jsonDecode(result);
+        final ev = EventModel.fromJson(data);
+        setState(() {
+          _isManual = false;
+          _selectedEvent = ev;
+        });
+        if (mounted) {
+          showToast(context, 'Event selected: ${ev.eventName}',
+              type: ToastType.success);
+        }
+      } catch (_) {
+        if (mounted) {
+          showToast(context, 'QR code does not contain valid event data.',
+              type: ToastType.error);
+        }
       }
     }
   }
@@ -569,7 +601,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const _CardTitle(icon: '📅', label: 'Event Details'),
-                const _FieldLabel('Select Event *'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const _FieldLabel('Select Event *'),
+                    GestureDetector(
+                      onTap: _scanEventQr,
+                      child: const Text('📷 SCAN QR',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.accent)),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 5),
                 _buildEventDropdown(),
                 if (_isManual) ...[
