@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # HTTP + storage
+  # Networking + storage
   http: ^1.2.1
   sqflite: ^2.3.3
   path: ^1.9.0
@@ -31,3 +31,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # ── Logo asset ─────────────────────────────────────────────────────
+  # Put your logo file (logo.png or logo.jpg) inside assets/images/
+  # then run: flutter pub get
+  assets:
+    - assets/images/

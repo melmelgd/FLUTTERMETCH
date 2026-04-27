@@ -66,7 +66,7 @@ class _QrScanScreenState extends State<QrScanScreen>
         _fail('Not a valid LGU QR code.');
         return;
       }
-      final json = Map<String, dynamic>.from(decoded as Map);
+      final json = Map<String, dynamic>.from(decoded);
 
       // user_id may arrive as int or string
       final rawId = json['user_id'];

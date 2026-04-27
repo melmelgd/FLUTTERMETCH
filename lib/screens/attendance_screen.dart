@@ -66,7 +66,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _init() async {
     final result = await Connectivity().checkConnectivity();
     if (!mounted) return;
-    setState(() => _isOnline = result != ConnectivityResult.none);
+    setState(() => _isOnline = result.any((r) => r != ConnectivityResult.none));
     _setDefaultTime();
     await _loadCachedEvents();
     await _loadHistory();
@@ -75,7 +75,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     Connectivity().onConnectivityChanged.listen((r) async {
       if (!mounted) return;
-      final online = r != ConnectivityResult.none;
+      final online = r.any((x) => x != ConnectivityResult.none);
       setState(() => _isOnline = online);
       _showNetworkBanner(online);
       if (online) await _syncNow(silent: false);

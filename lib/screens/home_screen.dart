@@ -35,13 +35,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     setState(() {
       _session = session;
-      _isOnline = result != ConnectivityResult.none;
+      _isOnline = result.any((r) => r != ConnectivityResult.none);
       _loaded = true;
     });
     await _checkPending();
     Connectivity().onConnectivityChanged.listen((r) {
       if (!mounted) return;
-      setState(() => _isOnline = r != ConnectivityResult.none);
+      setState(() => _isOnline = r.any((x) => x != ConnectivityResult.none));
       if (_isOnline) _checkPending();
     });
   }
