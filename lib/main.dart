@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import 'models/session_model.dart';
 import 'screens/home_screen.dart';
+import 'screens/qr_scanner_screen.dart';
 import 'services/session_service.dart';
 import 'services/theme_service.dart';
 import 'utils/app_colors.dart';
@@ -150,10 +152,10 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 
   Future<void> _login() async {
-    final username = _usernameCtrl.text.trim();
+    final input = _usernameCtrl.text.trim();
     final password = _passwordCtrl.text;
 
-    if (username.isEmpty) {
+    if (input.isEmpty) {
       showToast(
         context,
         'Please enter your username.',
@@ -174,10 +176,22 @@ class _LoginScreenState extends State<_LoginScreen> {
     setState(() => _loading = true);
 
     try {
-      final numericId = RegExp(r'\d+').firstMatch(username)?.group(0);
+      String displayName;
+      String email;
+
+      if (input.contains('@')) {
+        email = input;
+        displayName = _formatDisplayName(input.split('@')[0]);
+      } else {
+        displayName = _formatDisplayName(input);
+        email = '${input.toLowerCase().replaceAll(' ', '.')}@ormoc.gov.ph';
+      }
+
+      final numericId = RegExp(r'\d+').firstMatch(input)?.group(0);
       final session = SessionModel(
         userId: int.tryParse(numericId ?? '') ?? 1001,
-        firstName: _formatDisplayName(username),
+        firstName: displayName,
+        email: email,
         accountType: 'Event Staff',
         access: 'Mobile',
       );
@@ -189,8 +203,64 @@ class _LoginScreenState extends State<_LoginScreen> {
     }
   }
 
+  Future<void> _scanLoginQr() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => QrScannerScreen(
+          onScanned: (code) async {
+            // In a real app, you'd validate the code with an API
+            // Here we just simulate a login if any code is scanned
+            return true;
+          },
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() => _loading = true);
+      try {
+        SessionModel session;
+        try {
+          // Attempt to parse result as JSON
+          final data = jsonDecode(result) as Map<String, dynamic>;
+          session = SessionModel(
+            userId: int.tryParse(data['user_id']?.toString() ?? '') ??
+                int.tryParse(data['id']?.toString() ?? '') ??
+                2002,
+            firstName: data['full_name'] ??
+                data['fullName'] ??
+                data['name'] ??
+                data['first_name'] ??
+                'User',
+            email: data['email'],
+            accountType: data['account_type'] ?? 'Event Staff',
+            access: 'Mobile',
+          );
+        } catch (_) {
+          // Fallback if not JSON (original logic)
+          final namePart = result.contains('@') ? result.split('@')[0] : result;
+          session = SessionModel(
+            userId: 2002,
+            firstName: _formatDisplayName(namePart),
+            email: result.contains('@') ? result : '$result@ormoc.gov.ph',
+            accountType: 'Event Staff',
+            access: 'Mobile',
+          );
+        }
+        await widget.onLogin(session, _rememberMe);
+      } finally {
+        if (mounted) {
+          setState(() => _loading = false);
+        }
+      }
+    }
+  }
+
   String _formatDisplayName(String username) {
-    final cleaned = username
+    // Remove numbers at the end of the name (e.g., ludybongconag0 -> ludybongconag)
+    String cleaned = username.replaceAll(RegExp(r'\d+$'), '');
+
+    cleaned = cleaned
         .replaceAll(RegExp(r'[._-]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
@@ -497,45 +567,67 @@ class _LoginScreenState extends State<_LoginScreen> {
             ],
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _loading ? null : _login,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3568E6),
-                foregroundColor: Colors.white,
-                disabledBackgroundColor:
-                    const Color(0xFF3568E6).withOpacity(0.65),
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3568E6),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        const Color(0xFF3568E6).withOpacity(0.65),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Sign In',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(width: 10),
+                            Icon(Icons.arrow_forward_rounded, size: 20),
+                          ],
+                        ),
                 ),
               ),
-              child: _loading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Sign In',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(width: 10),
-                        Icon(Icons.arrow_forward_rounded, size: 20),
-                      ],
+              const SizedBox(width: 12),
+              Material(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: _loading ? null : _scanLoginQr,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: Colors.white,
+                      size: 28,
                     ),
-            ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

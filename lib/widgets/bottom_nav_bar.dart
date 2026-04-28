@@ -67,8 +67,8 @@ class AppBottomNavBar extends StatelessWidget {
             child: GestureDetector(
               onTap: onFabPressed,
               child: Container(
-                width: 72,
-                height: 72,
+                width: 68,
+                height: 68,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
@@ -88,16 +88,16 @@ class AppBottomNavBar extends StatelessWidget {
                   ),
                   child: Center(
                     child: Container(
-                      width: 32,
-                      height: 32,
+                      width: 28,
+                      height: 28,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(color: Colors.white, width: 1.5),
                       ),
                       child: const Icon(
                         Icons.add,
                         color: Colors.white,
-                        size: 22,
+                        size: 18,
                       ),
                     ),
                   ),

@@ -48,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String get _fullName => widget.session?.firstName ?? 'david';
-  String get _email => '${_fullName.toLowerCase()}38700988@gmail.com'; 
+  String get _email => widget.session?.email ?? '${_fullName.toLowerCase()}38700988@gmail.com';
   String get _role => widget.session?.accountType ?? 'Admin';
 
   Future<void> _logout() async {

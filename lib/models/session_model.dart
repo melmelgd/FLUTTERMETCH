@@ -3,12 +3,14 @@ class SessionModel {
   final String firstName;
   final String accountType;
   final String access;
+  final String? email;
 
   SessionModel({
     required this.userId,
     required this.firstName,
     required this.accountType,
     required this.access,
+    this.email,
   });
 
   factory SessionModel.fromJson(Map<String, dynamic> json) => SessionModel(
@@ -16,6 +18,7 @@ class SessionModel {
         firstName: json['first_name'] as String? ?? '',
         accountType: json['account_type'] as String? ?? '',
         access: json['access'] as String? ?? '',
+        email: json['email'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -23,5 +26,6 @@ class SessionModel {
         'first_name': firstName,
         'account_type': accountType,
         'access': access,
+        'email': email,
       };
 }
