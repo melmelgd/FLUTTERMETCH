@@ -144,7 +144,7 @@ class ApiService {
       'attendance_status': record.attendanceStatus,
       'time_in': record.timeIn,
       'time_out': record.timeOut,
-      'is_manual_entry': record.isManualEntry,
+      'is_manual_entry': record.isManualEntry ? 1 : 0,
       // event_id  → pass when event already exists in DB
       // event_data → pass when created offline (PHP creates it on-the-fly)
       'event_id': record.eventId,
@@ -170,7 +170,7 @@ class ApiService {
                 'attendance_status': r.attendanceStatus,
                 'time_in': r.timeIn,
                 'time_out': r.timeOut,
-                'is_manual_entry': r.isManualEntry,
+                'is_manual_entry': r.isManualEntry ? 1 : 0,
                 'event_id': r.eventId,
                 'event_data': r.eventData,
               })
@@ -182,16 +182,22 @@ class ApiService {
     final summary = result.data!['summary'] as Map<String, dynamic>? ?? {};
     final rawResults = result.data!['results'] as List<dynamic>? ?? [];
 
+    int? parseId(dynamic val) {
+      if (val == null) return null;
+      if (val is int) return val;
+      return int.tryParse(val.toString());
+    }
+
     return BulkSyncResult(
-      total: summary['total'] as int? ?? 0,
-      success: summary['success'] as int? ?? 0,
-      errors: summary['errors'] as int? ?? 0,
+      total: parseId(summary['total']) ?? 0,
+      success: parseId(summary['success']) ?? 0,
+      errors: parseId(summary['errors']) ?? 0,
       results: rawResults.map((r) {
         final m = r as Map<String, dynamic>;
         return BulkRecordResult(
           ok: m['status'] == 'success',
-          localId: m['local_id'] as int?,
-          attendanceId: m['attendance_id'] as int?,
+          localId: parseId(m['local_id']),
+          attendanceId: parseId(m['attendance_id']),
           error: m['message'] as String?,
         );
       }).toList(),

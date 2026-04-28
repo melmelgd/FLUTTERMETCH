@@ -258,17 +258,17 @@ class _LoginScreenState extends State<_LoginScreen> {
         prefixIcon: Icon(icon, color: Colors.white54, size: 20),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.08),
+        fillColor: Colors.white.withOpacity(0.08),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: Colors.white.withOpacity(0.08),
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.10),
+            color: Colors.white.withOpacity(0.10),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -287,15 +287,15 @@ class _LoginScreenState extends State<_LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 86,
-          height: 86,
-          padding: const EdgeInsets.all(8),
+          width: 70, // Reduced from 86
+          height: 70, // Reduced from 86
+          padding: const EdgeInsets.all(12), // Increased padding to shrink logo inside
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.98),
+            color: Colors.white.withOpacity(0.98),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
+                color: Colors.black.withOpacity(0.28),
                 blurRadius: 26,
                 offset: const Offset(0, 14),
               ),
@@ -303,7 +303,7 @@ class _LoginScreenState extends State<_LoginScreen> {
           ),
           child: ClipOval(
             child: Image.asset(
-              'lib/assets/images/ormoc.png',
+              'lib/assets/images/EM.png',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => const Icon(
                 Icons.location_city,
@@ -329,7 +329,7 @@ class _LoginScreenState extends State<_LoginScreen> {
           'Event Management System',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.78),
+            color: Colors.white.withOpacity(0.78),
             fontSize: 15,
             fontWeight: FontWeight.w500,
           ),
@@ -362,12 +362,12 @@ class _LoginScreenState extends State<_LoginScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(26, 28, 26, 24),
       decoration: BoxDecoration(
-        color: const Color(0xFF314565).withValues(alpha: 0.90),
+        color: const Color(0xFF314565).withOpacity(0.90),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
+            color: Colors.black.withOpacity(0.22),
             blurRadius: 28,
             offset: const Offset(0, 20),
           ),
@@ -392,7 +392,7 @@ class _LoginScreenState extends State<_LoginScreen> {
             child: Text(
               'Sign in to continue',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.62),
+                color: Colors.white.withOpacity(0.62),
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
@@ -505,7 +505,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                 backgroundColor: const Color(0xFF3568E6),
                 foregroundColor: Colors.white,
                 disabledBackgroundColor:
-                    const Color(0xFF3568E6).withValues(alpha: 0.65),
+                    const Color(0xFF3568E6).withOpacity(0.65),
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
@@ -567,7 +567,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                 height: 260,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: Colors.white.withOpacity(0.05),
                 ),
               ),
             ),
@@ -579,7 +579,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                 height: 220,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.03),
+                  color: Colors.white.withOpacity(0.03),
                 ),
               ),
             ),
@@ -609,7 +609,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                             '(c) 2026 City of Ormoc. All rights reserved.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.45),
+                              color: Colors.white.withOpacity(0.45),
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
@@ -624,7 +624,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                               Text(
                                 '|',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.28),
+                                  color: Colors.white.withOpacity(0.28),
                                   fontSize: 12,
                                 ),
                               ),
@@ -632,7 +632,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                               Text(
                                 '|',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.28),
+                                  color: Colors.white.withOpacity(0.28),
                                   fontSize: 12,
                                 ),
                               ),

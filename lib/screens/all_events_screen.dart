@@ -1,6 +1,7 @@
 // lib/screens/all_events_screen.dart
 
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import '../models/event_model.dart';
 import '../models/session_model.dart';
 import '../utils/app_colors.dart';
@@ -42,10 +43,18 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
 
   Future<void> _loadEvents() async {
     final events = await DatabaseService.getCachedEvents();
+    
+    // Update attendee counts from local records for each event
+    final updatedEvents = <EventModel>[];
+    for (var e in events) {
+      final count = await DatabaseService.getEventAttendeeCount(e.eventId, e.eventName);
+      updatedEvents.add(e.copyWith(attendeeCount: count > 0 ? count : e.attendeeCount));
+    }
+
     if (!mounted) return;
     setState(() {
-      _allEvents = events;
-      _filteredEvents = events;
+      _allEvents = updatedEvents;
+      _filteredEvents = updatedEvents;
       _loaded = true;
     });
   }
@@ -682,7 +691,38 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                         MaterialPageRoute(
                           builder: (_) => QrScannerScreen(
                             onScanned: (code) async {
-                              _recordAttendance(event, code, 'QR Scanned');
+                              String name = 'QR Scanned';
+                              String dept = 'N/A';
+                              String attendeeCode = code;
+
+                              try {
+                                final data = jsonDecode(code);
+                                if (data is Map) {
+                                  name = data['name'] ?? data['attendee_name'] ?? 'QR Scanned';
+                                  dept = data['department'] ?? data['dept'] ?? 'N/A';
+                                  attendeeCode = data['id']?.toString() ?? data['code']?.toString() ?? code;
+                                }
+                              } catch (_) {
+                                if (code.contains(',')) {
+                                  final parts = code.split(',');
+                                  if (parts.length >= 2) {
+                                    attendeeCode = parts[0].trim();
+                                    name = parts[1].trim();
+                                    if (parts.length >= 3) dept = parts[2].trim();
+                                  }
+                                } else {
+                                  final existingName = await DatabaseService.findNameByCode(code);
+                                  if (existingName != null) {
+                                    name = existingName;
+                                  } else if (!RegExp(r'^[0-9]+$').hasMatch(code)) {
+                                    name = code;
+                                  } else {
+                                    name = 'ID: $code';
+                                  }
+                                }
+                              }
+
+                              _recordAttendance(event, attendeeCode, name, department: dept);
                               return true;
                             },
                           ),
@@ -760,15 +800,16 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     );
   }
 
-  Future<void> _recordAttendance(EventModel event, String code, String name) async {
+  Future<void> _recordAttendance(EventModel event, String code, String name, {String department = 'N/A'}) async {
     final now = DateTime.now();
     final record = AttendanceRecord(
       attendeeName: name,
       attendeeCode: code,
-      department: 'N/A',
+      department: department,
       attendanceStatus: 'present',
       timeIn: DateFormat('HH:mm').format(now),
       eventId: event.eventId,
+      eventData: event.toJson(),
       eventName: event.eventName,
       eventDate: event.eventDate,
       checkinType: 'in',

@@ -31,17 +31,26 @@ class EventModel {
   /// Creates an [EventModel] from a JSON map.
   /// 
   /// Handles null values gracefully and provides defaults where appropriate.
-  factory EventModel.fromJson(Map<String, dynamic> json) => EventModel(
-        eventId: json['event_id'] as int?,
-        eventName: json['event_name'] as String? ?? '',
-        eventDate: json['event_date'] as String?,
-        eventTime: json['event_time'] as String?,
-        host: json['host'] as String?,
-        speaker: json['speaker'] as String?,
-        eventLocation: json['event_location'] as String?,
-        attendeeCount: json['attendee_count'] as int?,
-        status: json['status'] as String?,
-      );
+  factory EventModel.fromJson(Map<String, dynamic> json) {
+    // Safely parse eventId which might be returned as String or int from server
+    int? parseId(dynamic val) {
+      if (val == null) return null;
+      if (val is int) return val;
+      return int.tryParse(val.toString());
+    }
+
+    return EventModel(
+      eventId: parseId(json['event_id']),
+      eventName: json['event_name'] as String? ?? '',
+      eventDate: json['event_date'] as String?,
+      eventTime: json['event_time'] as String?,
+      host: json['host'] as String?,
+      speaker: json['speaker'] as String?,
+      eventLocation: json['event_location'] as String?,
+      attendeeCount: parseId(json['attendee_count']),
+      status: json['status'] as String?,
+    );
+  }
 
   /// Converts this [EventModel] to a JSON map.
   /// 

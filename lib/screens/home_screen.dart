@@ -62,12 +62,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadEvents() async {
     final cached = await DatabaseService.getCachedEvents();
+    final attendeeCount = await DatabaseService.getTotalAttendeeCount();
+    
+    // Update attendee counts from local records for each event
+    final updatedEvents = <EventModel>[];
+    for (var e in cached) {
+      final count = await DatabaseService.getEventAttendeeCount(e.eventId, e.eventName);
+      updatedEvents.add(e.copyWith(attendeeCount: count > 0 ? count : e.attendeeCount));
+    }
+
     if (!mounted) return;
     setState(() {
-      _totalEvents = cached.length;
-      _completedEvents = 0; // Logic for completed could be added later
-      _totalAttendees = 0; // Total attendees across events
-      _upcomingEvents = cached;
+      _totalEvents = updatedEvents.length;
+      _completedEvents = updatedEvents.where((e) => e.status?.toLowerCase() == 'completed').length;
+      _totalAttendees = attendeeCount;
+      _upcomingEvents = updatedEvents;
     });
   }
 
@@ -106,8 +115,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _goToAttendance({EventModel? initialEvent}) async {
     if (_session == null) return;
-    // AttendanceScreen removed
-    showToast(context, 'Attendance Screen Removed', type: ToastType.warning);
+
+    if (initialEvent != null) {
+      // If an event is provided, show its details or sync options
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => UploadScreen(initialEvent: initialEvent.eventName)),
+      );
+    } else {
+      // If called from the sync notice
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const UploadScreen()),
+      );
+    }
     await _checkPending();
     await _loadEvents();
   }
@@ -223,9 +245,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: color.withOpacity(0.08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
+          border: Border.all(color: color.withOpacity(0.15)),
         ),
         child: Column(
           children: [
@@ -259,8 +281,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             if (_selectedTab == 0) _buildHeader(),
-            if (_selectedTab == 0 && _isOnline && _pendingCount > 0)
-              _buildSyncNotice(),
             Expanded(child: _buildTabContent()),
           ],
         ),
@@ -326,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: const Color(0xFF4B6CB7),
                     shape: BoxShape.circle,
                     border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.40),
+                  color: Colors.white.withOpacity(0.40),
                         width: 1.5),
                   ),
                   child: Center(
@@ -345,7 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 20),
           Text('Good day!',
               style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.75),
+          color: Colors.white.withOpacity(0.75),
                   fontSize: 13,
                   fontWeight: FontWeight.w500)),
           const SizedBox(height: 4),
@@ -358,7 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 4),
           Text('Manage events & attendance',
               style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
+                  color: Colors.white.withOpacity(0.65),
                   fontSize: 13,
                   fontWeight: FontWeight.w400)),
           const SizedBox(height: 20),
@@ -391,7 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2), blurRadius: 8)
+              color: Colors.black.withOpacity(0.2), blurRadius: 8)
         ],
       ),
       child: const ClipOval(
@@ -408,9 +428,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
+        color: Colors.white.withOpacity(0.12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+        border: Border.all(color: Colors.white.withOpacity(0.20)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -568,7 +588,7 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Colors.black.withOpacity(0.06),
               blurRadius: 8,
               offset: const Offset(0, 2))
         ],
@@ -579,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
+                color: iconColor.withOpacity(0.12),
                 shape: BoxShape.circle),
             child: Icon(icon, color: iconColor, size: 18),
           ),
@@ -626,7 +646,7 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Colors.black.withOpacity(0.06),
               blurRadius: 8,
               offset: const Offset(0, 2))
         ],

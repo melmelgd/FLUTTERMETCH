@@ -54,7 +54,7 @@ class AppBottomNavBar extends StatelessWidget {
                   // Center gap for FAB
                   const SizedBox(width: 80),
                   // Right side
-                  Expanded(child: _buildNavItem(2, Icons.cloud_upload_outlined, 'Upload')),
+                  Expanded(child: _buildNavItem(2, Icons.how_to_reg_outlined, 'Attendance')),
                   Expanded(child: _buildNavItem(3, Icons.settings_outlined, 'Settings')),
                 ],
               ),

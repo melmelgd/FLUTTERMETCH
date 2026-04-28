@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import '../models/session_model.dart';
 import '../services/session_service.dart';
 import '../services/database_service.dart';
-import '../utils/app_colors.dart';
-import '../utils/toast_helper.dart';
 import '../main.dart';
 import 'privacy_policy_screen.dart';
 import 'package:provider/provider.dart';
@@ -327,7 +325,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: Colors.white,
+            activeThumbColor: Colors.white,
             activeTrackColor: const Color(0xFF1B2D5B),
           ),
         ],
