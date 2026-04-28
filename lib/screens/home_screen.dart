@@ -14,8 +14,8 @@ import '../widgets/bottom_nav_bar.dart';
 import '../main.dart';
 import 'all_events_screen.dart';
 import 'new_event_screen.dart';
-import 'attendance_screen.dart';
 import 'settings_screen.dart';
+import 'upload_screen.dart';
 import 'qr_scanner_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -106,13 +106,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _goToAttendance({EventModel? initialEvent}) async {
     if (_session == null) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-          builder: (_) =>
-              AttendanceScreen(session: _session!, initialEvent: initialEvent)),
-    );
+    // AttendanceScreen removed
+    showToast(context, 'Attendance Screen Removed', type: ToastType.warning);
     await _checkPending();
-    await _loadEvents(); // Reload in case new events were added via QR
+    await _loadEvents();
   }
 
   void _onFabPressed() {
@@ -283,21 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1:
         return AllEventsScreen(session: _session);
       case 2:
-        return QrScannerScreen(
-          onScanned: (code) async {
-            try {
-              final data = jsonDecode(code);
-              final ev = EventModel.fromJson(data);
-              await _goToAttendance(initialEvent: ev);
-              return false; // Don't pop when in tab
-            } catch (_) {
-              if (mounted) {
-                showToast(context, 'Invalid Event QR', type: ToastType.error);
-              }
-              return false;
-            }
-          },
-        );
+        return const UploadScreen();
       case 3:
         return SettingsScreen(session: _session);
       default:
@@ -360,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          Text('Good day! 👋',
+          Text('Good day!',
               style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.75),
                   fontSize: 13,

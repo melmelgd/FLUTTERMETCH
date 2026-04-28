@@ -65,13 +65,20 @@ class DatabaseService {
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          // Add missing columns to events_cache
-          try {
-            await db.execute('ALTER TABLE events_cache ADD COLUMN event_location TEXT');
-            await db.execute('ALTER TABLE events_cache ADD COLUMN attendee_count INTEGER DEFAULT 0');
-            await db.execute('ALTER TABLE events_cache ADD COLUMN status TEXT DEFAULT "upcoming"');
-          } catch (e) {
-            // Columns might already exist
+          // Add missing columns to events_cache one by one to avoid total failure if some exist
+          final columns = {
+            'event_location': 'TEXT',
+            'attendee_count': 'INTEGER DEFAULT 0',
+            'status': 'TEXT DEFAULT "upcoming"',
+          };
+
+          for (var entry in columns.entries) {
+            try {
+              await db.execute(
+                  'ALTER TABLE events_cache ADD COLUMN ${entry.key} ${entry.value}');
+            } catch (e) {
+              debugPrint('Column ${entry.key} might already exist: $e');
+            }
           }
         }
       },
@@ -154,6 +161,9 @@ class DatabaseService {
             'event_time': ev.eventTime,
             'host': ev.host,
             'speaker': ev.speaker,
+            'event_location': ev.eventLocation,
+            'attendee_count': ev.attendeeCount ?? 0,
+            'status': ev.status ?? 'upcoming',
           },
           conflictAlgorithm: ConflictAlgorithm.replace);
     }

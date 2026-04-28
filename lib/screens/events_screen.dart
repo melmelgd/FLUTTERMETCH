@@ -7,7 +7,12 @@ import '../models/session_model.dart';
 import '../utils/app_colors.dart';
 import '../utils/toast_helper.dart';
 import 'new_event_screen.dart';
-import 'attendance_screen.dart';
+import 'qr_scanner_screen.dart';
+import 'event_detail_screen.dart';
+import 'upload_screen.dart';
+import '../services/database_service.dart';
+import '../models/attendance_record.dart';
+import 'package:intl/intl.dart';
 
 class EventsScreen extends StatefulWidget {
   final SessionModel? session;
@@ -35,13 +40,14 @@ class _EventsScreenState extends State<EventsScreen> {
     super.dispose();
   }
 
-  void _loadEvents() {
-    // Initializing with an empty list as per user request to remove mock data
-    final events = <EventModel>[];
-    setState(() {
-      _allEvents = events;
-      _filtered = events;
-    });
+  Future<void> _loadEvents() async {
+    final events = await DatabaseService.getCachedEvents();
+    if (mounted) {
+      setState(() {
+        _allEvents = events;
+        _filtered = events;
+      });
+    }
   }
 
   void _onSearch() {
@@ -54,12 +60,184 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Future<void> _goToAttend(EventModel event) async {
-    if (widget.session == null) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AttendanceScreen(session: widget.session!),
+    _showAttendOptions(event);
+  }
+
+  void _showAttendOptions(EventModel event) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Attendance: ${event.eventName}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textMain,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'How would you like to record attendance?',
+              style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionBtn(
+                    icon: Icons.person_add_alt_1_rounded,
+                    label: 'Manual Input',
+                    color: const Color(0xFF1B2D5B),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showManualAttendanceDialog(event);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildActionBtn(
+                    icon: Icons.cloud_upload_outlined,
+                    label: 'Upload',
+                    color: const Color(0xFF10B981),
+                    onTap: () {
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      }
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const UploadScreen()),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildActionBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.15)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showManualAttendanceDialog(EventModel event) {
+    final nameCtrl = TextEditingController();
+    final idCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Manual Attendance'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'Attendee Name'),
+            ),
+            TextField(
+              controller: idCtrl,
+              decoration: const InputDecoration(labelText: 'Attendee ID'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameCtrl.text.isNotEmpty && idCtrl.text.isNotEmpty) {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+                _recordAttendance(event, idCtrl.text, nameCtrl.text);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _recordAttendance(EventModel event, String code, String name) async {
+    final now = DateTime.now();
+    final record = AttendanceRecord(
+      attendeeName: name,
+      attendeeCode: code,
+      department: 'N/A',
+      attendanceStatus: 'present',
+      timeIn: DateFormat('HH:mm').format(now),
+      eventId: event.eventId,
+      eventName: event.eventName,
+      eventDate: event.eventDate,
+      checkinType: 'in',
+      timestamp: now.toIso8601String(),
+      synced: false,
+    );
+
+    await DatabaseService.addRecord(record);
+    if (mounted) {
+      showToast(context, 'Attendance recorded for $name', type: ToastType.success);
+    }
   }
 
   Future<void> _confirmDelete(EventModel event) async {
@@ -80,11 +258,22 @@ class _EventsScreenState extends State<EventsScreen> {
       ),
     );
     if (confirm == true && mounted) {
-      setState(() {
-        _allEvents.removeWhere((e) => e.eventId == event.eventId);
-        _filtered.removeWhere((e) => e.eventId == event.eventId);
-      });
-      showToast(context, 'Event deleted', type: ToastType.success);
+      try {
+        if (event.eventId != null) {
+          // 1. Delete from the actual database
+          await DatabaseService.deleteEvent(event.eventId!);
+          
+          // 2. Update the UI state
+          setState(() {
+            _allEvents.removeWhere((e) => e.eventId == event.eventId);
+            _filtered.removeWhere((e) => e.eventId == event.eventId);
+          });
+          
+          showToast(context, 'Event deleted permanently', type: ToastType.success);
+        }
+      } catch (e) {
+        showToast(context, 'Failed to delete: $e', type: ToastType.error);
+      }
     }
   }
 
@@ -391,15 +580,33 @@ class _EventsScreenState extends State<EventsScreen> {
                   icon: Icons.visibility_outlined,
                   label: 'View',
                   color: const Color(0xFF4B6CB7),
-                  onTap: () => showToast(context, 'View — coming soon!',
-                      type: ToastType.info),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EventDetailScreen(event: event),
+                      ),
+                    );
+                  },
                 ),
                 _buildAction(
                   icon: Icons.edit_outlined,
                   label: 'Edit',
                   color: const Color(0xFF1B2D5B),
-                  onTap: () => showToast(context, 'Edit — coming soon!',
-                      type: ToastType.info),
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NewEventScreen(
+                          session: widget.session,
+                          existingEvent: event,
+                        ),
+                      ),
+                    );
+                    if (result == true) {
+                      _loadEvents();
+                    }
+                  },
                 ),
                 _buildAction(
                   icon: Icons.how_to_reg_outlined,

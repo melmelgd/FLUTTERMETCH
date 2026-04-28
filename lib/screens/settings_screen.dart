@@ -3,8 +3,13 @@
 import 'package:flutter/material.dart';
 import '../models/session_model.dart';
 import '../services/session_service.dart';
+import '../services/database_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/toast_helper.dart';
 import '../main.dart';
+import 'privacy_policy_screen.dart';
+import 'package:provider/provider.dart';
+import '../services/theme_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SessionModel? session;
@@ -17,41 +22,49 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
-  bool _darkModeEnabled = false;
+  int _updateCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUpdateCount();
+  }
+
+  Future<void> _loadUpdateCount() async {
+    try {
+      final pending = await DatabaseService.getPendingRecords();
+      final events = await DatabaseService.getCachedEvents();
+      if (mounted) {
+        setState(() {
+          _updateCount = pending.length + events.length;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading update count: $e');
+    }
+  }
 
   String get _userInitial {
     final name = widget.session?.firstName ?? '';
     return name.isNotEmpty ? name[0].toUpperCase() : 'D';
   }
 
-  String get _fullName {
-    final name = widget.session?.firstName ?? 'User';
-    return name;
-  }
-
-  String get _email => 'No email'; // SessionModel doesn't have email
-  String get _role => widget.session?.accountType ?? 'Staff';
+  String get _fullName => widget.session?.firstName ?? 'david';
+  String get _email => '${_fullName.toLowerCase()}38700988@gmail.com'; 
+  String get _role => widget.session?.accountType ?? 'Admin';
 
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Sign Out',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        content: const Text('Are you sure you want to sign out?',
-            style: TextStyle(fontSize: 14)),
+        title: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Are you sure you want to sign out?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sign Out',
-                style: TextStyle(color: Color(0xFFEF4444))),
+            child: const Text('Sign Out', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -69,155 +82,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canPop = Navigator.of(context).canPop();
-    final content = Column(
-      children: [
-        _buildHeader(),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Profile card ──────────────────────────────
-                _buildProfileCard(),
-                const SizedBox(height: 28),
-
-                // ── Preferences section ───────────────────────
-                _buildSectionLabel('PREFERENCES'),
-                const SizedBox(height: 10),
-                _buildToggleItem(
-                  icon: Icons.notifications_outlined,
-                  iconColor: const Color(0xFFF5A623),
-                  label: 'Notifications',
-                  value: _notificationsEnabled,
-                  onChanged: (v) => setState(() => _notificationsEnabled = v),
-                ),
-                const SizedBox(height: 2),
-                _buildToggleItem(
-                  icon: Icons.wb_sunny_outlined,
-                  iconColor: const Color(0xFFF5A623),
-                  label: 'Dark Mode',
-                  value: _darkModeEnabled,
-                  onChanged: (v) => setState(() => _darkModeEnabled = v),
-                ),
-
-                const SizedBox(height: 28),
-
-                // ── About section ─────────────────────────────
-                _buildSectionLabel('ABOUT'),
-                const SizedBox(height: 10),
-                _buildNavItem(
-                  icon: Icons.shield_outlined,
-                  iconColor: AppColors.primary,
-                  label: 'Privacy Policy',
-                  onTap: () {
-                    // TODO: open privacy policy
-                  },
-                ),
-                const SizedBox(height: 2),
-                _buildAppVersionItem(),
-
-                const SizedBox(height: 28),
-
-                // ── Sign Out ──────────────────────────────────
-                _buildSignOutButton(),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-
-    if (!canPop) {
-      return Material(
-        color: AppColors.bg,
-        child: content,
-      );
-    }
+    final themeService = Provider.of<ThemeService>(context);
+    final isDark = themeService.isDarkMode;
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: content,
-    );
-  }
-
-  // ── Header ──────────────────────────────────────────────────────
-  Widget _buildHeader() {
-    final canPop = Navigator.of(context).canPop();
-    return Container(
-      decoration: const BoxDecoration(gradient: AppColors.headerGradient),
-      padding: EdgeInsets.fromLTRB(
-        20,
-        MediaQuery.of(context).padding.top + 16,
-        20,
-        24,
-      ),
-      child: Row(
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      body: Column(
         children: [
-          if (canPop) ...[
-            GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white,
-                  size: 16,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-          ],
+          _buildHeader(),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Settings',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Manage your preferences',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.65),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Avatar initial circle
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4B6CB7),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.40),
-                width: 1.5,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                _userInitial,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildProfileCard(isDark),
+                  const SizedBox(height: 32),
+                  _buildSectionLabel('PREFERENCES'),
+                  const SizedBox(height: 12),
+                  _buildPreferenceGroup(isDark, [
+                    _buildToggleItem(
+                      isDark: isDark,
+                      icon: Icons.notifications_none_rounded,
+                      iconColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFF7ED),
+                      iconFgColor: const Color(0xFFF59E0B),
+                      label: 'Notifications',
+                      value: _notificationsEnabled,
+                      onChanged: (v) => setState(() => _notificationsEnabled = v),
+                    ),
+                    _buildToggleItem(
+                      isDark: isDark,
+                      icon: isDark ? Icons.nightlight_round : Icons.wb_sunny_outlined,
+                      iconColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFFFF7ED),
+                      iconFgColor: const Color(0xFFF59E0B),
+                      label: 'Dark Mode',
+                      value: isDark,
+                      onChanged: (v) => themeService.toggleTheme(v),
+                    ),
+                  ]),
+                  const SizedBox(height: 32),
+                  _buildSectionLabel('ABOUT'),
+                  const SizedBox(height: 12),
+                  _buildPreferenceGroup(isDark, [
+                    _buildNavItem(
+                      isDark: isDark,
+                      icon: Icons.shield_outlined,
+                      iconColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+                      iconFgColor: const Color(0xFF3B82F6),
+                      label: 'Privacy Policy',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                        );
+                      },
+                    ),
+                    _buildAppVersionItem(isDark),
+                  ]),
+                  const SizedBox(height: 32),
+                  _buildSignOutButton(),
+                ],
               ),
             ),
           ),
@@ -226,82 +150,121 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── Profile card ────────────────────────────────────────────────
-  Widget _buildProfileCard() {
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFF1B2D5B),
+      ),
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 10, 20, 30),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                child: const Icon(Icons.location_city, color: Color(0xFF1B2D5B), size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('City of Ormoc', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text('EVENT MANAGEMENT', style: TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 0.5)),
+                  ],
+                ),
+              ),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
+                    child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 18),
+                  ),
+                  if (_notificationsEnabled && _updateCount > 0)
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        child: Text(
+                          '$_updateCount',
+                          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
+                child: Center(child: Text(_userInitial, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          const Text('Settings', style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800)),
+          const Text('Manage your preferences', style: TextStyle(color: Colors.white70, fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          )
         ],
       ),
       child: Row(
         children: [
-          // Avatar
           Container(
-            width: 52,
-            height: 52,
-            decoration: const BoxDecoration(
-              color: Color(0xFF1B2D5B),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                _userInitial,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
+            width: 60,
+            height: 60,
+            decoration: const BoxDecoration(color: Color(0xFF1B2D5B), shape: BoxShape.circle),
+            child: Center(child: Text(_userInitial, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold))),
           ),
-          const SizedBox(width: 14),
-          // Name + email + role badge
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _fullName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textMain,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _email,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                // Role badge
+                Text(_fullName,
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF1B2D5B))),
+                Text(_email, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                const SizedBox(height: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEEF2FF),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _role,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF4F46E5),
-                    ),
-                  ),
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Text(_role,
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white70 : const Color(0xFF64748B))),
                 ),
               ],
             ),
@@ -311,162 +274,125 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── Section label ───────────────────────────────────────────────
   Widget _buildSectionLabel(String label) {
-    return Text(
-      label,
-      style: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: AppColors.textMuted,
-        letterSpacing: 0.8,
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
     );
   }
 
-  // ── Toggle item ─────────────────────────────────────────────────
+  Widget _buildPreferenceGroup(bool isDark, List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
   Widget _buildToggleItem({
+    required bool isDark,
     required IconData icon,
     required Color iconColor,
+    required Color iconFgColor,
     required String label,
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(width: 14),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: iconColor, borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: iconFgColor, size: 22),
+          ),
+          const SizedBox(width: 16),
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textMain,
-              ),
-            ),
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF1B2D5B))),
           ),
           Switch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: Colors.white,
-            activeTrackColor: AppColors.primary,
-            inactiveThumbColor: Colors.white,
-            inactiveTrackColor: const Color(0xFFD1D5DB),
-            trackOutlineColor:
-                WidgetStateProperty.all(Colors.transparent),
+            activeColor: Colors.white,
+            activeTrackColor: const Color(0xFF1B2D5B),
           ),
         ],
       ),
     );
   }
 
-  // ── Nav item (chevron) ──────────────────────────────────────────
   Widget _buildNavItem({
+    required bool isDark,
     required IconData icon,
     required Color iconColor,
+    required Color iconFgColor,
     required String label,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
+      borderRadius: BorderRadius.circular(24),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
-            Icon(icon, color: iconColor, size: 22),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textMain,
-                ),
-              ),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: iconColor, borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: iconFgColor, size: 22),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                size: 20, color: AppColors.textMuted),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : const Color(0xFF1B2D5B))),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFFCBD5E1), size: 20),
           ],
         ),
       ),
     );
   }
 
-  // ── App version item ────────────────────────────────────────────
-  Widget _buildAppVersionItem() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
+  Widget _buildAppVersionItem(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Row(
         children: [
           Container(
-            width: 22,
-            height: 22,
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.info_outline_rounded,
-                color: Color(0xFF10B981), size: 14),
+                color: isDark ? const Color(0xFF064E3B) : const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.info_outline, color: Color(0xFF10B981), size: 22),
           ),
-          const SizedBox(width: 14),
-          const Expanded(
+          const SizedBox(width: 16),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'App Version',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textMain,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'v1.0.0 — LSU Ormoc',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
+                Text('App Version',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : const Color(0xFF1B2D5B))),
+                const Text('v1.0.0 — LGU Ormoc', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
               ],
             ),
           ),
@@ -475,30 +401,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── Sign Out button ─────────────────────────────────────────────
   Widget _buildSignOutButton() {
-    return GestureDetector(
+    return InkWell(
       onTap: _logout,
+      borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
-          color: const Color(0xFFFEF2F2),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFFECACA)),
+          color: const Color(0xFFFFF1F2),
+          borderRadius: BorderRadius.circular(20),
         ),
         child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.logout_rounded,
-                color: Color(0xFFEF4444), size: 20),
+            Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 20),
             SizedBox(width: 12),
-            Text(
-              'Sign Out',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFFEF4444),
-              ),
-            ),
+            Text('Sign Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
       ),
