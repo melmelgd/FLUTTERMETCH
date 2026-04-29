@@ -6,6 +6,7 @@ import '../models/event_model.dart';
 import '../models/session_model.dart';
 import '../services/database_service.dart';
 import '../utils/toast_helper.dart';
+import '../widgets/app_header.dart';
 import 'package:intl/intl.dart';
 
 class NewEventScreen extends StatefulWidget {
@@ -200,112 +201,30 @@ class _NewEventScreenState extends State<NewEventScreen> {
     );
   }
 
-  // ── Header ────────────────────────────────────────────────────────
   Widget _buildHeader() {
-    return Container(
-      color: const Color(0xFFF1F5F9),
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 8, 20, 20),
-      child: Column(
+    return AppHeader(
+      userInitial: _userInitial,
+      showBackButton: true,
+      onNotificationTap: () {
+        // Notification action if any
+      },
+      bottom: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('City of Ormoc',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: const Color(0xFF0F172A),
-                            fontWeight: FontWeight.w800)),
-                    const Text('EVENT MANAGEMENT',
-                        style: TextStyle(
-                            color: Color(0xFF64748B),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.4)),
-                  ],
-                ),
-              ),
-              // Notification Bell
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 10,
-                    )
-                  ],
-                ),
-                child: const Icon(Icons.notifications_none_rounded,
-                    color: Color(0xFF475569)),
-              ),
-              const SizedBox(width: 12),
-              _buildAvatar(),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.arrow_back,
-                      color: Color(0xFF64748B), size: 20),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('New Event',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: const Color(0xFF0F172A),
-                          fontWeight: FontWeight.w800)),
-                  const Text('Fill in the details below',
-                      style: TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500)),
-                ],
-              ),
-            ],
-          ),
+          Text('New Event',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: const Color(0xFF0F172A), fontWeight: FontWeight.w800)),
+          const Text('Fill in the details below',
+              style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 
-  Widget _buildAvatar() {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: const Color(0xFF4B6CB7),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.40), width: 1.5),
-      ),
-      child: Center(
-        child: Text(
-          _userInitial,
-          style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-  }
+
 
   // ── Form Components ───────────────────────────────────────────────
   Widget _buildCoverImageSection() {

@@ -34,6 +34,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
 
   bool _torchOn = false;
   bool _processing = false;
+  bool _showSuccess = false;
   String? _lastResult;
 
   @override
@@ -78,6 +79,24 @@ class _QrScannerScreenState extends State<QrScannerScreen>
       final shouldPop = await widget.onScanned!(code);
       if (shouldPop && mounted) {
         Navigator.of(context).pop(code);
+        return;
+      } else if (mounted) {
+        // Show success feedback
+        setState(() {
+          _showSuccess = true;
+          _processing = false;
+        });
+
+        // Vibrate if possible or just wait
+        await Future.delayed(const Duration(milliseconds: 800));
+
+        if (mounted) {
+          setState(() {
+            _showSuccess = false;
+            _lastResult = null; // Allow scanning again quickly
+          });
+          _controller.start();
+        }
         return;
       }
     } else {
@@ -191,6 +210,36 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                                 color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                if (_showSuccess)
+                  Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle_outline_rounded,
+                            color: Colors.white, size: 20),
+                        SizedBox(width: 10),
+                        Text('Attendance Recorded!',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
