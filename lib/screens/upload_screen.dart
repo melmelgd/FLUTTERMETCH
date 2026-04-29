@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import '../services/database_service.dart';
 import '../services/api_service.dart';
-import '../services/theme_service.dart';
 import '../utils/toast_helper.dart';
 import '../models/attendance_record.dart';
 import '../models/event_model.dart';
+import '../models/session_model.dart';
+import '../services/session_service.dart';
 import 'qr_scanner_screen.dart';
 
 class UploadScreen extends StatefulWidget {
@@ -26,12 +26,18 @@ class _UploadScreenState extends State<UploadScreen> {
   List<String> _eventNames = [];
   final TextEditingController _searchController = TextEditingController();
   final Set<int> _selectedIds = {};
+  SessionModel? _session;
 
   @override
   void initState() {
     super.initState();
     _selectedEvent = widget.initialEvent;
-    _loadRecords();
+    _init();
+  }
+
+  Future<void> _init() async {
+    _session = await SessionService.getSession();
+    await _loadRecords();
   }
 
   Future<void> _loadRecords() async {
@@ -302,30 +308,28 @@ class _UploadScreenState extends State<UploadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeService = Provider.of<ThemeService>(context);
-    final isDark = themeService.isDarkMode;
     final pendingCount = _records.where((r) => r.synced == false).length;
     final filtered = _filteredRecords;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF0F2F5),
+      backgroundColor: const Color(0xFFF1F5F9),
       body: Column(
         children: [
-          _buildTopBar(isDark, pendingCount),
+          _buildHeader(pendingCount),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  _buildStatsBar(isDark, filtered),
-                  _buildSearchAndActionRow(isDark),
+                  _buildStatsBar(filtered),
+                  _buildSearchAndActionRow(),
                   _isLoading
                       ? const Padding(
                           padding: EdgeInsets.all(40.0),
                           child: CircularProgressIndicator(),
                         )
                       : filtered.isEmpty
-                          ? _buildEmptyState(isDark)
-                          : _buildAttendanceList(isDark, filtered),
+                          ? _buildEmptyState()
+                          : _buildAttendanceList(filtered),
                 ],
               ),
             ),
@@ -335,105 +339,155 @@ class _UploadScreenState extends State<UploadScreen> {
     );
   }
 
-  Widget _buildTopBar(bool isDark, int pendingCount) {
+  Widget _buildHeader(int pendingCount) {
+    final canPop = Navigator.of(context).canPop();
     return Container(
-      width: double.infinity,
-      color: const Color(0xFF1B2D5B),
-      padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 8, 16, 24),
+      color: const Color(0xFFF1F5F9),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        MediaQuery.of(context).padding.top + 8,
+        20,
+        20,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Branding row
           Row(
             children: [
-              Container(
-                width: 38, // Reduced from 45
-                height: 38, // Reduced from 45
-                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                child: Padding(
-                  padding: const EdgeInsets.all(4), // Added padding to shrink logo inside circle
-                  child: ClipOval(
-                    child: Image.asset(
-                      'lib/assets/images/EM.png',
-                      fit: BoxFit.contain, // Changed to contain to avoid cropping if resized
-                      errorBuilder: (_, __, ___) => const Icon(Icons.location_city, color: Color(0xFF1B2D5B)),
+              if (canPop) ...[
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.05),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Color(0xFF64748B),
+                      size: 16,
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
+              ],
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'City of Ormoc',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                    Text(
-                      'Event Management System',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
+                    Text('City of Ormoc',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: const Color(0xFF0F172A),
+                            fontWeight: FontWeight.w800)),
+                    Text('EVENT MANAGEMENT',
+                        style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.4)),
                   ],
                 ),
               ),
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.person_outline_rounded, color: Colors.white, size: 24),
-              ),
-            ],
-          ),
-          const SizedBox(height: 30),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.of(context).maybePop(),
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: _showEventPicker,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _selectedEvent ?? 'All Events',
-                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const Row(
-                      children: [
-                        Text(
-                          'Attendance Records',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                        Icon(Icons.arrow_drop_down_rounded, color: Colors.white70, size: 20),
+              // Notification Bell (Static here since we are already on this screen)
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 10,
+                        )
                       ],
                     ),
-                  ],
-                ),
+                    child: const Icon(Icons.notifications_none_rounded,
+                        color: Color(0xFF475569)),
+                  ),
+                  if (pendingCount > 0)
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        child: Text(
+                          '$pendingCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              const Spacer(),
+              const SizedBox(width: 12),
+              _buildAvatar(),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    onTap: _showEventPicker,
+                    child: Row(
+                      children: [
+                        Text(
+                          _selectedEvent ?? 'All Attendance',
+                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            color: const Color(0xFF0F172A),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF64748B)),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '${_records.length} records total',
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
               if (pendingCount > 0)
                 GestureDetector(
                   onTap: _isSyncing ? null : _startSync,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF5A623),
+                      color: const Color(0xFF2563EB),
                       borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
                     ),
                     child: Row(
                       children: [
@@ -441,17 +495,17 @@ class _UploadScreenState extends State<UploadScreen> {
                           const SizedBox(
                             width: 14,
                             height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1B2D5B)),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         else
-                          const Icon(Icons.cloud_upload_rounded, color: Color(0xFF1B2D5B), size: 16),
+                          const Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 18),
                         const SizedBox(width: 8),
                         Text(
-                          _isSyncing ? 'Syncing...' : 'Sync ($pendingCount)',
+                          _isSyncing ? 'Syncing...' : 'Sync Now',
                           style: const TextStyle(
-                            color: Color(0xFF1B2D5B),
+                            color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                            fontSize: 13,
                           ),
                         ),
                       ],
@@ -460,50 +514,107 @@ class _UploadScreenState extends State<UploadScreen> {
                 ),
             ],
           ),
-
+          const SizedBox(height: 18),
+          _buildSearchBar(),
         ],
       ),
     );
   }
 
-  Widget _buildStatsBar(bool isDark, List<AttendanceRecord> filtered) {
+  Widget _buildAvatar() {
+    final name = _session?.firstName ?? '';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'D';
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF1F5F9),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 15,
+              fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+          )
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (v) => setState(() {}),
+        style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
+        decoration: const InputDecoration(
+          hintText: 'Search attendees...',
+          hintStyle: TextStyle(fontSize: 15, color: Color(0xFF94A3B8)),
+          prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 22),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatsBar(List<AttendanceRecord> filtered) {
     final synced = filtered.where((r) => r.synced == true).length;
     final pending = filtered.where((r) => r.synced == false).length;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         children: [
-          _buildStatCard(isDark, filtered.length.toString(), Colors.black),
-          const SizedBox(width: 12),
-          _buildStatCard(isDark, synced.toString(), const Color(0xFF10B981)),
-          const SizedBox(width: 12),
-          _buildStatCard(isDark, pending.toString(), const Color(0xFFEF4444)),
+          _buildStatCard('Total', filtered.length.toString(), const Color(0xFF0F172A), const Color(0xFFF1F5F9)),
+          const SizedBox(width: 10),
+          _buildStatCard('Synced', synced.toString(), const Color(0xFF059669), const Color(0xFFECFDF5)),
+          const SizedBox(width: 10),
+          _buildStatCard('Local', pending.toString(), const Color(0xFFE11D48), const Color(0xFFFFF1F2)),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(bool isDark, String value, Color color) {
+  Widget _buildStatCard(String label, String value, Color color, Color bgColor) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 24),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withOpacity(0.02),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Center(
-          child: Text(
-            value,
-            style: TextStyle(color: color, fontSize: 36, fontWeight: FontWeight.bold),
-          ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(color: color, fontSize: 24, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ],
         ),
       ),
     );
@@ -548,66 +659,42 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
-  Widget _buildSearchAndActionRow(bool isDark) {
+  Widget _buildSearchAndActionRow() {
     final filtered = _filteredRecords;
     final allSelected = filtered.isNotEmpty && _selectedIds.length == filtered.length;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Row(
         children: [
-          Expanded(
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black.withOpacity(0.05)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.search, color: Colors.grey[400], size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search...',
-                        hintStyle: TextStyle(color: Colors.grey[400], fontSize: 16),
-                        border: InputBorder.none,
-                      ),
-                      onChanged: (v) => setState(() {}),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
           GestureDetector(
             onTap: _toggleSelectAll,
             child: Container(
-              height: 48,
+              height: 46,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                color: allSelected ? const Color(0xFF1B2D5B).withOpacity(0.1) : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                color: allSelected ? const Color(0xFF2563EB).withOpacity(0.1) : Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black.withOpacity(0.05)),
+                border: Border.all(color: allSelected ? const Color(0xFF2563EB).withOpacity(0.3) : Colors.black.withOpacity(0.05)),
               ),
               child: Row(
                 children: [
-                  Checkbox(
-                    value: allSelected,
-                    onChanged: (_) => _toggleSelectAll(),
-                    activeColor: const Color(0xFF1B2D5B),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: allSelected,
+                      onChanged: (_) => _toggleSelectAll(),
+                      activeColor: const Color(0xFF2563EB),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     'All', 
                     style: TextStyle(
-                      color: isDark ? Colors.white70 : Colors.black87, 
-                      fontWeight: FontWeight.bold,
+                      color: allSelected ? const Color(0xFF2563EB) : const Color(0xFF0F172A), 
+                      fontWeight: FontWeight.w700,
                       fontSize: 14,
                     )
                   ),
@@ -616,16 +703,41 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
           ),
           const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              onTap: _onScanAttendee,
+              child: Container(
+                height: 46,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF059669),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFF059669).withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 18),
+                    SizedBox(width: 8),
+                    Text('Scan Attendee', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
           GestureDetector(
             onTap: _selectedIds.isEmpty ? null : _deleteSelected,
             child: Container(
-              height: 48,
-              width: 48,
+              height: 46,
+              width: 46,
               decoration: BoxDecoration(
-                color: _selectedIds.isEmpty ? Colors.grey[300] : const Color(0xFFEF4444),
+                color: _selectedIds.isEmpty ? Colors.white : const Color(0xFFE11D48),
                 borderRadius: BorderRadius.circular(12),
+                border: _selectedIds.isEmpty ? Border.all(color: Colors.black.withOpacity(0.05)) : null,
               ),
-              child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 22),
+              child: Icon(Icons.delete_outline_rounded, color: _selectedIds.isEmpty ? const Color(0xFF94A3B8) : Colors.white, size: 22),
             ),
           ),
         ],
@@ -633,14 +745,14 @@ class _UploadScreenState extends State<UploadScreen> {
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
+  Widget _buildEmptyState() {
     return Container(
       margin: const EdgeInsets.all(16),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 60),
+      padding: const EdgeInsets.symmetric(vertical: 80),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.02),
@@ -651,148 +763,174 @@ class _UploadScreenState extends State<UploadScreen> {
       ),
       child: Column(
         children: [
-          Icon(Icons.group_outlined, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text(
-            'No attendees yet',
-            style: TextStyle(color: Colors.grey[400], fontSize: 18, fontWeight: FontWeight.w500),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.person_search_rounded, size: 48, color: Color(0xFFCBD5E1)),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'No attendees found',
+            style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Start scanning or select a different event',
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w500),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAttendanceList(bool isDark, List<AttendanceRecord> filtered) {
+  Widget _buildAttendanceList(List<AttendanceRecord> filtered) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
       itemCount: filtered.length,
       itemBuilder: (context, index) {
         final record = filtered[index];
         final isSelected = _selectedIds.contains(record.localId);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: isSelected ? Border.all(color: const Color(0xFF1B2D5B), width: 1.5) : null,
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: isSelected ? Border.all(color: const Color(0xFF2563EB).withOpacity(0.2), width: 1.5) : null,
           ),
-          child: Row(
+          child: Column(
             children: [
-              Checkbox(
-                value: isSelected,
-                onChanged: (val) {
-                  setState(() {
-                    if (val == true) {
-                      if (record.localId != null) _selectedIds.add(record.localId!);
-                    } else {
-                      _selectedIds.remove(record.localId);
-                    }
-                  });
-                },
-                activeColor: const Color(0xFF1B2D5B),
-                shape: const CircleBorder(),
-              ),
-              const SizedBox(width: 8),
-              CircleAvatar(
-                backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
-                child: Icon(Icons.person_rounded, color: isDark ? Colors.white70 : const Color(0xFF1B2D5B)),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
                   children: [
-                    Text(
-                      record.attendeeName ?? 'Unknown',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: isDark ? Colors.white : const Color(0xFF1B2D5B),
+                    // Avatar/Selection
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedIds.remove(record.localId);
+                          } else {
+                            if (record.localId != null) _selectedIds.add(record.localId!);
+                          }
+                        });
+                      },
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: isSelected 
+                          ? const Icon(Icons.check_rounded, color: Colors.white)
+                          : Center(
+                              child: Text(
+                                (record.attendeeName.isNotEmpty ? record.attendeeName[0] : '?').toUpperCase(),
+                                style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w800, fontSize: 18),
+                              ),
+                            ),
                       ),
                     ),
-                    Row(
-                      children: [
-                        Text(
-                          record.timeIn ?? '--:--',
-                          style: TextStyle(color: Colors.grey[500], fontSize: 13),
-                        ),
-                        if (record.eventName != null) ...[
-                          const SizedBox(width: 8),
+                    const SizedBox(width: 16),
+                    // Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            record.attendeeName.isEmpty ? 'Unknown Attendee' : record.attendeeName,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF94A3B8)),
+                              const SizedBox(width: 4),
+                              Text(
+                                record.timeIn ?? '--:--',
+                                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w500),
+                              ),
+                              const SizedBox(width: 12),
+                              const Icon(Icons.event_note_rounded, size: 12, color: Color(0xFF94A3B8)),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  record.eventName ?? 'Unassigned',
+                                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w500, overflow: TextOverflow.ellipsis),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Status Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: record.synced == true ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           Container(
-                            width: 3,
-                            height: 3,
+                            width: 6,
+                            height: 6,
                             decoration: BoxDecoration(
-                              color: Colors.grey[400],
+                              color: record.synced == true ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                               shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _selectedEvent = record.eventName),
-                              child: Text(
-                                record.eventName!,
-                                style: TextStyle(
-                                  color: isDark ? Colors.blue[300] : const Color(0xFF1B2D5B),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  overflow: TextOverflow.ellipsis,
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
+                          const SizedBox(width: 6),
+                          Text(
+                            record.synced == true ? 'Synced' : 'Local',
+                            style: TextStyle(
+                              fontSize: 11, 
+                              fontWeight: FontWeight.w700,
+                              color: record.synced == true ? const Color(0xFF059669) : const Color(0xFFB45309),
                             ),
                           ),
                         ],
-                      ],
+                      ),
                     ),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: record.synced == true 
-                        ? Colors.green.withOpacity(0.1) 
-                        : Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      record.synced == true ? 'Synced' : 'Local',
-                      style: TextStyle(
-                        fontSize: 11, 
-                        fontWeight: FontWeight.bold,
-                        color: record.synced == true ? Colors.green : Colors.orange,
+              if (record.syncError != null) ...[
+                const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Color(0xFFE11D48), size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          record.syncError!,
+                          style: const TextStyle(color: Color(0xFFE11D48), fontSize: 11, fontWeight: FontWeight.w500),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                  if (record.syncError != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: GestureDetector(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Sync Error'),
-                              content: Text(record.syncError!),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-                              ],
-                            ),
-                          );
-                        },
-                        child: Icon(Icons.error_outline_rounded, color: Colors.red[400], size: 20),
-                      ),
-                    ),
-                ],
-              ),
+                ),
+              ],
             ],
           ),
         );

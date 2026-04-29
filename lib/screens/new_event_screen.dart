@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../models/event_model.dart';
 import '../models/session_model.dart';
 import '../services/database_service.dart';
-import '../utils/app_colors.dart';
 import '../utils/toast_helper.dart';
 import 'package:intl/intl.dart';
 
@@ -36,9 +35,37 @@ class _NewEventScreenState extends State<NewEventScreen> {
   void initState() {
     super.initState();
     if (widget.existingEvent != null) {
-      _titleCtrl.text = widget.existingEvent!.eventName;
-      // You can populate other fields here if EventModel has them
-      // e.g. _orgCtrl.text = widget.existingEvent!.host ?? '';
+      final e = widget.existingEvent!;
+      _titleCtrl.text = e.eventName;
+      _descCtrl.text = (e.speaker == 'none' || e.speaker == null) ? '' : e.speaker!;
+      _locCtrl.text = e.eventLocation ?? '';
+      _orgCtrl.text = (e.host == 'none' || e.host == null) ? '' : e.host!;
+      _maxAttendeesCtrl.text = e.attendeeCount?.toString() ?? '';
+
+      if (e.status != null && e.status!.isNotEmpty) {
+        _status = e.status![0].toUpperCase() + e.status!.substring(1).toLowerCase();
+      }
+
+      if (e.eventDate != null) {
+        try {
+          _selectedDate = DateFormat('MMMM dd, yyyy').parse(e.eventDate!);
+        } catch (_) {
+          try {
+            _selectedDate = DateTime.parse(e.eventDate!);
+          } catch (_) {}
+        }
+      }
+
+      if (e.eventTime != null && e.eventTime != 'No time') {
+        try {
+          final parts = e.eventTime!.split(' - ');
+          final format = DateFormat.jm();
+          _startTime = TimeOfDay.fromDateTime(format.parse(parts.first));
+          if (parts.length > 1) {
+            _endTime = TimeOfDay.fromDateTime(format.parse(parts.last));
+          }
+        } catch (_) {}
+      }
     }
   }
 
@@ -60,35 +87,35 @@ class _NewEventScreenState extends State<NewEventScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: const Color(0xFFF1F5F9),
       body: Column(
         children: [
           _buildHeader(),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildCoverImageSection(),
-                  const SizedBox(height: 20),
-                  _buildSectionCard('EVENT DETAILS', [
+                  const SizedBox(height: 16),
+                  _buildSectionCard('EVENT DETAILS', Icons.description_outlined, const Color(0xFF3B82F6), [
                     _buildLabel('Title *'),
                     _buildTextField(hint: 'Event name', controller: _titleCtrl),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 20),
                     _buildLabel('Description'),
                     _buildTextField(
-                      hint: 'Details...',
+                      hint: 'Add details about this event...',
                       controller: _descCtrl,
                       maxLines: 4,
                       alignLabelWithHint: true,
                     ),
                   ]),
-                  const SizedBox(height: 20),
-                  _buildSectionCard('DATE & TIME', [
+                  const SizedBox(height: 16),
+                  _buildSectionCard('DATE & TIME', Icons.access_time_filled_rounded, const Color(0xFFF59E0B), [
                     _buildLabel('Date *'),
                     _buildDatePickerField(),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 20),
                     Row(
                       children: [
                         Expanded(
@@ -113,16 +140,16 @@ class _NewEventScreenState extends State<NewEventScreen> {
                       ],
                     ),
                   ]),
-                  const SizedBox(height: 20),
-                  _buildSectionCard('LOCATION & ORGANIZER', [
+                  const SizedBox(height: 16),
+                  _buildSectionCard('LOCATION & ORGANIZER', Icons.location_on_rounded, const Color(0xFF10B981), [
                     _buildLabel('Location *'),
-                    _buildTextField(hint: 'Venue', controller: _locCtrl),
-                    const SizedBox(height: 18),
+                    _buildTextField(hint: 'Venue or address', controller: _locCtrl),
+                    const SizedBox(height: 20),
                     _buildLabel('Organizer'),
                     _buildTextField(hint: 'Department or office', controller: _orgCtrl),
                   ]),
-                  const SizedBox(height: 20),
-                  _buildSectionCard('CLASSIFICATION', [
+                  const SizedBox(height: 16),
+                  _buildSectionCard('CLASSIFICATION', Icons.sell_rounded, const Color(0xFFF43F5E), [
                     Row(
                       children: [
                         Expanded(
@@ -154,7 +181,7 @@ class _NewEventScreenState extends State<NewEventScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 20),
                     _buildLabel('Max Attendees'),
                     _buildTextField(
                       hint: 'e.g. 200',
@@ -176,117 +203,106 @@ class _NewEventScreenState extends State<NewEventScreen> {
   // ── Header ────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.only(top: 50, bottom: 25),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF10284D), Color(0xFF1B2D5B)],
-        ),
-      ),
+      color: const Color(0xFFF1F5F9),
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 8, 20, 20),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                _buildSeal(),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('City of Ormoc',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700)),
-                      Text('EVENT MANAGEMENT',
-                          style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.4)),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4B6CB7),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.40),
-                        width: 1.5),
-                  ),
-                  child: Center(
-                    child: Text(_userInitial,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 30),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.arrow_back,
-                        color: Colors.white, size: 20),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                const Column(
+          Row(
+            children: [
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('New Event',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
+                    Text('City of Ormoc',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: const Color(0xFF0F172A),
                             fontWeight: FontWeight.w800)),
-                    Text('Fill in the details below',
+                    const Text('EVENT MANAGEMENT',
                         style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500)),
+                            color: Color(0xFF64748B),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.4)),
                   ],
                 ),
-              ],
-            ),
+              ),
+              // Notification Bell
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 10,
+                    )
+                  ],
+                ),
+                child: const Icon(Icons.notifications_none_rounded,
+                    color: Color(0xFF475569)),
+              ),
+              const SizedBox(width: 12),
+              _buildAvatar(),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_back,
+                      color: Color(0xFF64748B), size: 20),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('New Event',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          color: const Color(0xFF0F172A),
+                          fontWeight: FontWeight.w800)),
+                  const Text('Fill in the details below',
+                      style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSeal() {
+  Widget _buildAvatar() {
     return Container(
-      width: 38,
-      height: 38,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF4B6CB7),
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2), blurRadius: 8)
-        ],
+        border: Border.all(color: Colors.white.withValues(alpha: 0.40), width: 1.5),
       ),
-      child: const ClipOval(
-        child: Icon(Icons.location_city,
-            color: AppColors.primary, size: 22),
+      child: Center(
+        child: Text(
+          _userInitial,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
@@ -295,13 +311,13 @@ class _NewEventScreenState extends State<NewEventScreen> {
   Widget _buildCoverImageSection() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 10,
               offset: const Offset(0, 4))
         ],
@@ -309,36 +325,41 @@ class _NewEventScreenState extends State<NewEventScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('COVER IMAGE',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF9CA3AF),
-                  letterSpacing: 0.8)),
-          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildSectionIcon(Icons.image_outlined, const Color(0xFFA855F7)),
+              const SizedBox(width: 12),
+              const Text('COVER IMAGE',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF64748B),
+                      letterSpacing: 0.8)),
+            ],
+          ),
+          const SizedBox(height: 20),
           Container(
-            height: 140,
+            height: 160,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: const Color(0xFFE5E7EB),
+                color: const Color(0xFFF1F5F9),
                 width: 1.5,
-                style: BorderStyle.solid,
               ),
             ),
-            child: Column(
+            child: const Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.cloud_upload_outlined,
-                    color: Colors.grey.withValues(alpha: 0.4), size: 40),
-                const SizedBox(height: 12),
-                const Text('Tap to upload photo',
+                    color: Color(0xFFCBD5E1), size: 44),
+                SizedBox(height: 12),
+                Text('Tap to upload photo',
                     style: TextStyle(
-                        color: Color(0xFF9CA3AF),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500)),
+                        color: Color(0xFF94A3B8),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -347,16 +368,27 @@ class _NewEventScreenState extends State<NewEventScreen> {
     );
   }
 
-  Widget _buildSectionCard(String title, List<Widget> children) {
+  Widget _buildSectionIcon(IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, color: Colors.white, size: 18),
+    );
+  }
+
+  Widget _buildSectionCard(String title, IconData icon, Color iconColor, List<Widget> children) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 10,
               offset: const Offset(0, 4))
         ],
@@ -364,13 +396,18 @@ class _NewEventScreenState extends State<NewEventScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF9CA3AF),
-                  letterSpacing: 0.8)),
-          const SizedBox(height: 20),
+          Row(
+            children: [
+              _buildSectionIcon(icon, iconColor),
+              const SizedBox(width: 12),
+              Text(title,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF64748B),
+                      letterSpacing: 0.8)),
+            ],
+          ),
+          const SizedBox(height: 24),
           ...children,
         ],
       ),
@@ -379,12 +416,12 @@ class _NewEventScreenState extends State<NewEventScreen> {
 
   Widget _buildLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Text(text,
           style: const TextStyle(
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF4B5563))),
+              color: Color(0xFF64748B))),
     );
   }
 
@@ -399,23 +436,23 @@ class _NewEventScreenState extends State<NewEventScreen> {
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      style: const TextStyle(fontSize: 15, color: AppColors.textMain),
+      style: const TextStyle(fontSize: 16, color: Color(0xFF0F172A), fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
         filled: true,
-        fillColor: const Color(0xFFF9FAFB),
+        fillColor: const Color(0xFFF8FAFC),
         alignLabelWithHint: alignLabelWithHint,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFF1F5F9))),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFF1F5F9))),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF4B6CB7), width: 1.5)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       ),
     );
   }
@@ -432,11 +469,11 @@ class _NewEventScreenState extends State<NewEventScreen> {
         if (date != null) setState(() => _selectedDate = date);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -447,13 +484,14 @@ class _NewEventScreenState extends State<NewEventScreen> {
                   : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}',
               style: TextStyle(
                 color: _selectedDate == null
-                    ? const Color(0xFF9CA3AF)
-                    : AppColors.textMain,
-                fontSize: 14,
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF0F172A),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            const Icon(Icons.calendar_today_outlined,
-                color: Color(0xFF6B7280), size: 18),
+            const Icon(Icons.calendar_today_rounded,
+                color: Color(0xFF0F172A), size: 18),
           ],
         ),
       ),
@@ -479,11 +517,11 @@ class _NewEventScreenState extends State<NewEventScreen> {
         }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF1F5F9)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -492,13 +530,14 @@ class _NewEventScreenState extends State<NewEventScreen> {
               time == null ? '--:-- --' : time.format(context),
               style: TextStyle(
                 color: time == null
-                    ? const Color(0xFF9CA3AF)
-                    : AppColors.textMain,
-                fontSize: 14,
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF0F172A),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
               ),
             ),
             const Icon(Icons.access_time_rounded,
-                color: Color(0xFF6B7280), size: 18),
+                color: Color(0xFF0F172A), size: 18),
           ],
         ),
       ),
@@ -511,22 +550,22 @@ class _NewEventScreenState extends State<NewEventScreen> {
     required ValueChanged<String?> onChanged,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Color(0xFF6B7280)),
+              color: Color(0xFF64748B)),
           items: items
               .map((e) => DropdownMenuItem(
                   value: e,
-                  child: Text(e, style: const TextStyle(fontSize: 14))))
+                  child: Text(e, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))))
               .toList(),
           onChanged: onChanged,
         ),
@@ -540,10 +579,10 @@ class _NewEventScreenState extends State<NewEventScreen> {
       width: double.infinity,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1B2D5B).withValues(alpha: 0.25),
+              color: const Color(0xFF2563EB).withValues(alpha: 0.2),
               blurRadius: 15,
               offset: const Offset(0, 8),
             )
@@ -553,18 +592,18 @@ class _NewEventScreenState extends State<NewEventScreen> {
           onPressed: _onSavePressed,
           icon: Icon(
               isEdit
-                  ? Icons.save_outlined
-                  : Icons.assignment_turned_in_outlined,
+                  ? Icons.save_rounded
+                  : Icons.assignment_turned_in_rounded,
               size: 20),
           label: Text(isEdit ? 'Save Changes' : 'Create Event',
               style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1B2D5B),
+            backgroundColor: const Color(0xFF2563EB),
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 18),
+            padding: const EdgeInsets.symmetric(vertical: 20),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 0,
           ),
         ),
@@ -590,16 +629,21 @@ class _NewEventScreenState extends State<NewEventScreen> {
     }
 
     final dateStr = DateFormat('MMMM dd, yyyy').format(_selectedDate!);
-    final startTimeStr =
-        _startTime != null ? _startTime!.format(context) : 'No time';
+    String timeStr = 'No time';
+    if (_startTime != null) {
+      timeStr = _startTime!.format(context);
+      if (_endTime != null) {
+        timeStr += ' - ${_endTime!.format(context)}';
+      }
+    }
 
     final event = EventModel(
       eventId: widget.existingEvent?.eventId,
       eventName: title,
       eventDate: dateStr,
-      eventTime: startTimeStr,
-      host: _orgCtrl.text.trim().isEmpty ? 'None' : _orgCtrl.text.trim(),
-      speaker: _descCtrl.text.trim().isEmpty ? 'None' : _descCtrl.text.trim(),
+      eventTime: timeStr,
+      host: _orgCtrl.text.trim().isEmpty ? 'none' : _orgCtrl.text.trim(),
+      speaker: _descCtrl.text.trim().isEmpty ? 'none' : _descCtrl.text.trim(),
       eventLocation: loc,
       status: _status.toLowerCase(),
       attendeeCount: int.tryParse(_maxAttendeesCtrl.text) ?? 0,

@@ -8,11 +8,14 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'models/session_model.dart';
 import 'screens/home_screen.dart';
 import 'screens/qr_scanner_screen.dart';
+import 'screens/privacy_policy_screen.dart';
+import 'screens/terms_of_service_screen.dart';
+import 'screens/help_screen.dart';
 import 'services/session_service.dart';
-import 'services/theme_service.dart';
 import 'utils/app_colors.dart';
 import 'utils/toast_helper.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,12 +36,7 @@ void main() async {
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeService(),
-      child: const LguMobileApp(),
-    ),
-  );
+  runApp(const LguMobileApp());
 }
 
 class LguMobileApp extends StatelessWidget {
@@ -46,11 +44,13 @@ class LguMobileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeService = Provider.of<ThemeService>(context);
+    final baseTextTheme = GoogleFonts.sourceSans3TextTheme();
+    final headingTextTheme = GoogleFonts.playfairDisplayTextTheme();
+
     return MaterialApp(
       title: 'Ormoc LGU',
       debugShowCheckedModeBanner: false,
-      themeMode: themeService.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: ThemeMode.light,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -58,14 +58,17 @@ class LguMobileApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         scaffoldBackgroundColor: AppColors.bg,
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          brightness: Brightness.dark,
+        textTheme: baseTextTheme.copyWith(
+          displayLarge: headingTextTheme.displayLarge,
+          displayMedium: headingTextTheme.displayMedium,
+          displaySmall: headingTextTheme.displaySmall,
+          headlineLarge: headingTextTheme.headlineLarge,
+          headlineMedium: headingTextTheme.headlineMedium,
+          headlineSmall: headingTextTheme.headlineSmall,
+          titleLarge: headingTextTheme.titleLarge,
+          titleMedium: headingTextTheme.titleMedium,
+          titleSmall: headingTextTheme.titleSmall,
         ),
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
       ),
       home: const AppRouter(),
     );
@@ -257,7 +260,6 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 
   String _formatDisplayName(String username) {
-    // Remove numbers at the end of the name (e.g., ludybongconag0 -> ludybongconag)
     String cleaned = username.replaceAll(RegExp(r'\d+$'), '');
 
     cleaned = cleaned
@@ -278,10 +280,28 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 
   void _showHelpMessage(String label) {
-    showToast(
-      context,
-      '$label is not available in this demo yet.',
-      type: ToastType.info,
+    Widget target;
+    switch (label) {
+      case 'Privacy Policy':
+        target = const PrivacyPolicyScreen();
+        break;
+      case 'Terms of Service':
+        target = const TermsOfServiceScreen();
+        break;
+      case 'Help':
+        target = const HelpScreen();
+        break;
+      default:
+        showToast(
+          context,
+          '$label is not available in this demo yet.',
+          type: ToastType.info,
+        );
+        return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => target),
     );
   }
 
@@ -356,31 +376,14 @@ class _LoginScreenState extends State<_LoginScreen> {
   Widget _buildBrandHeader() {
     return Column(
       children: [
-        Container(
-          width: 70, // Reduced from 86
-          height: 70, // Reduced from 86
-          padding: const EdgeInsets.all(12), // Increased padding to shrink logo inside
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.98),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.28),
-                blurRadius: 26,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: ClipOval(
-            child: Image.asset(
-              'lib/assets/images/EM.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.location_city,
-                color: AppColors.primary,
-                size: 38,
-              ),
-            ),
+        Image.asset(
+          'lib/assets/images/ormoc.png',
+          height: 120,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Icon(
+            Icons.location_city,
+            color: Colors.white,
+            size: 80,
           ),
         ),
         const SizedBox(height: 20),
@@ -429,34 +432,20 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 
   Widget _buildLoginCard() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(26, 28, 26, 24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF314565).withOpacity(0.90),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.22),
-            blurRadius: 28,
-            offset: const Offset(0, 20),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Align(
-            child: Text(
-              'Welcome Back',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Align(
+          child: Text(
+            'Welcome Back',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
             ),
           ),
+        ),
           const SizedBox(height: 6),
           Align(
             child: Text(
@@ -630,8 +619,7 @@ class _LoginScreenState extends State<_LoginScreen> {
             ],
           ),
         ],
-      ),
-    );
+      );
   }
 
   @override
@@ -640,41 +628,19 @@ class _LoginScreenState extends State<_LoginScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
             colors: [
-              Color(0xFF10284D),
-              Color(0xFF17335B),
-              Color(0xFF112A4B),
+              Colors.black,
+              Color(0xFF000000),
+              Color(0xFF4F8DFF),
+              Colors.black,
             ],
+            stops: [0.0, 0.2, 0.6, 1.0],
           ),
         ),
         child: Stack(
           children: [
-            Positioned(
-              top: -140,
-              left: -80,
-              child: Container(
-                width: 260,
-                height: 260,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.05),
-                ),
-              ),
-            ),
-            Positioned(
-              right: -110,
-              bottom: 90,
-              child: Container(
-                width: 220,
-                height: 220,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.03),
-                ),
-              ),
-            ),
             SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -692,10 +658,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                         children: [
                           _buildBrandHeader(),
                           const SizedBox(height: 30),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 420),
-                            child: _buildLoginCard(),
-                          ),
+                          _buildLoginCard(),
                           const SizedBox(height: 28),
                           Text(
                             '(c) 2026 City of Ormoc. All rights reserved.',
