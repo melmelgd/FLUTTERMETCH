@@ -1,6 +1,7 @@
 // lib/screens/events_screen.dart
 // All Events screen — matches EventFlow UI screenshot
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/event_model.dart';
 import '../models/session_model.dart';
@@ -9,6 +10,7 @@ import '../utils/toast_helper.dart';
 import 'new_event_screen.dart';
 import 'event_detail_screen.dart';
 import 'upload_screen.dart';
+import 'qr_scanner_screen.dart';
 import '../services/database_service.dart';
 import '../models/attendance_record.dart';
 import 'package:intl/intl.dart';
@@ -122,16 +124,52 @@ class _EventsScreenState extends State<EventsScreen> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: _buildActionBtn(
-                    icon: Icons.cloud_upload_outlined,
-                    label: 'Upload',
+                    icon: Icons.qr_code_scanner_rounded,
+                    label: 'Scan QR',
                     color: const Color(0xFF10B981),
                     onTap: () {
-                      if (Navigator.canPop(context)) {
-                        Navigator.pop(context);
-                      }
+                      Navigator.pop(context);
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const UploadScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => QrScannerScreen(
+                            onScanned: (code) async {
+                              String name = 'QR Scanned';
+                              String dept = 'N/A';
+                              String attendeeCode = code;
+
+                              try {
+                                final data = jsonDecode(code);
+                                if (data is Map) {
+                                  name = data['name'] ?? data['attendee_name'] ?? 'QR Scanned';
+                                  dept = data['department'] ?? data['dept'] ?? 'N/A';
+                                  attendeeCode = data['id']?.toString() ?? data['code']?.toString() ?? code;
+                                }
+                              } catch (_) {
+                                if (code.contains(',')) {
+                                  final parts = code.split(',');
+                                  if (parts.length >= 2) {
+                                    attendeeCode = parts[0].trim();
+                                    name = parts[1].trim();
+                                    if (parts.length >= 3) dept = parts[2].trim();
+                                  }
+                                } else {
+                                  final existingName = await DatabaseService.findNameByCode(code);
+                                  if (existingName != null) {
+                                    name = existingName;
+                                  } else if (!RegExp(r'^[0-9]+$').hasMatch(code)) {
+                                    name = code;
+                                  } else {
+                                    name = 'ID: $code';
+                                  }
+                                }
+                              }
+
+                              _recordAttendance(event, attendeeCode, name, department: dept);
+                              return false; // Keep scanning continuous
+                            },
+                          ),
+                        ),
                       );
                     },
                   ),

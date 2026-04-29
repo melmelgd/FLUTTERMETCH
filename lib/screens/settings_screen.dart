@@ -5,6 +5,7 @@ import '../models/session_model.dart';
 import '../services/session_service.dart';
 import '../services/database_service.dart';
 import '../main.dart';
+import '../widgets/app_header.dart';
 import 'privacy_policy_screen.dart';
 import 'upload_screen.dart';
 
@@ -134,83 +135,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFFF1F5F9),
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 8, 20, 20),
-      child: Column(
+    return AppHeader(
+      userInitial: _userInitial,
+      pendingCount: _updateCount,
+      onNotificationTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const UploadScreen()),
+        );
+        _loadUpdateCount();
+      },
+      bottom: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('City of Ormoc', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: const Color(0xFF0F172A), fontWeight: FontWeight.bold)),
-                    Text('EVENT MANAGEMENT', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, letterSpacing: 0.5)),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const UploadScreen()),
-                  );
-                  _loadUpdateCount();
-                },
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10),
-                      ]),
-                      child: const Icon(Icons.notifications_none_rounded, color: Color(0xFF475569), size: 22),
-                    ),
-                    if (_updateCount > 0)
-                      Positioned(
-                        top: -2,
-                        right: -2,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEF4444),
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
-                          ),
-                          child: Text(
-                            '$_updateCount',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
-                child: Center(child: Text(_userInitial, style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 15))),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Text('Settings', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: const Color(0xFF0F172A), fontWeight: FontWeight.w800)),
-          const Text('Preferences & account', style: TextStyle(color: Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w500)),
+          Text('Settings',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: const Color(0xFF0F172A), fontWeight: FontWeight.w800)),
+          const Text('Preferences & account',
+              style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500)),
         ],
       ),
     );

@@ -9,6 +9,7 @@ import '../services/session_service.dart';
 import '../services/database_service.dart';
 import '../utils/app_colors.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../widgets/app_header.dart';
 import '../main.dart';
 import 'all_events_screen.dart';
 import 'new_event_screen.dart';
@@ -74,7 +75,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _totalEvents = updatedEvents.length;
       _completedEvents = updatedEvents.where((e) => e.status?.toLowerCase() == 'completed').length;
       _totalAttendees = attendeeCount;
-      _upcomingEvents = updatedEvents;
+      // Only show events that are NOT completed in the upcoming list
+      _upcomingEvents = updatedEvents.where((e) => e.status?.toLowerCase() != 'completed').toList();
     });
   }
 
@@ -191,14 +193,33 @@ class _HomeScreenState extends State<HomeScreen> {
         bottom: false,
         child: Column(
           children: [
-            if (_selectedTab == 0) _buildHeader(),
+            if (_selectedTab == 0)
+              AppHeader(
+                userInitial: _userInitial,
+                pendingCount: _pendingCount,
+                onNotificationTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const UploadScreen()),
+                  );
+                  _checkPending();
+                },
+                onAvatarTap: () => setState(() => _selectedTab = 4),
+              ),
             Expanded(child: _buildTabContent()),
           ],
         ),
       ),
       bottomNavigationBar: AppBottomNavBar(
         selectedIndex: _selectedTab,
-        onTabChanged: (i) => setState(() => _selectedTab = i),
+        onTabChanged: (i) {
+          setState(() => _selectedTab = i);
+          // Refresh data when switching to Dashboard or Events tab
+          if (i == 0 || i == 1) {
+            _loadEvents();
+            _checkPending();
+          }
+        },
         onFabPressed: _onFabPressed,
       ),
     );
@@ -218,116 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return _buildBody();
     }
   }
-  // ── Header ────────────────────────────────────────────────────────
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'City of Ormoc',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: const Color(0xFF0F172A),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  'EVENT MANAGEMENT',
-                  style: TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Notification Bell
-          GestureDetector(
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const UploadScreen()),
-              );
-              _checkPending();
-            },
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                      )
-                    ],
-                  ),
-                  child: const Icon(Icons.notifications_none_rounded, color: Color(0xFF475569)),
-                ),
-                if (_pendingCount > 0)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEF4444),
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      child: Text(
-                        '$_pendingCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Profile Avatar
-          GestureDetector(
-            onTap: () => setState(() => _selectedTab = 4),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF1F5F9),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  _userInitial,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   // ── Body ──────────────────────────────────────────────────────────
   Widget _buildBody() {
