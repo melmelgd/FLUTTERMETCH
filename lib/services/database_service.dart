@@ -143,9 +143,55 @@ class DatabaseService {
         where: 'local_id = ?', whereArgs: [localId]);
   }
 
+  static Future<void> updateEventIdForRecords(String eventName, int serverId) async {
+    final db = await database;
+    await db.update('records', {'event_id': serverId},
+        where: 'event_name = ?', whereArgs: [eventName]);
+  }
+
   static Future<void> clearAllRecords() async {
     final db = await database;
     await db.delete('records');
+  }
+
+  static Future<void> deleteRecords(List<int> localIds) async {
+    final db = await database;
+    final batch = db.batch();
+    for (final id in localIds) {
+      batch.delete('records', where: 'local_id = ?', whereArgs: [id]);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  static Future<String?> findNameByCode(String code) async {
+    final db = await database;
+    final rows = await db.query(
+      'records',
+      columns: ['attendee_name'],
+      where: 'attendee_code = ? AND attendee_name != ?',
+      whereArgs: [code, 'QR Scanned'],
+      orderBy: 'local_id DESC',
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      return rows.first['attendee_name'] as String?;
+    }
+    return null;
+  }
+
+  static Future<int> getTotalAttendeeCount() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as count FROM records');
+    return (result.first['count'] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<int> getEventAttendeeCount(int? eventId, String eventName) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM records WHERE event_id = ? OR (event_id IS NULL AND event_name = ?)',
+      [eventId, eventName]
+    );
+    return (result.first['count'] as num?)?.toInt() ?? 0;
   }
 
   static Future<void> cacheEvents(List<EventModel> events) async {

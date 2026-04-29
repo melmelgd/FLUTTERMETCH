@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -6,11 +7,15 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 import 'models/session_model.dart';
 import 'screens/home_screen.dart';
+import 'screens/qr_scanner_screen.dart';
+import 'screens/privacy_policy_screen.dart';
+import 'screens/terms_of_service_screen.dart';
+import 'screens/help_screen.dart';
 import 'services/session_service.dart';
-import 'services/theme_service.dart';
 import 'utils/app_colors.dart';
 import 'utils/toast_helper.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,12 +36,7 @@ void main() async {
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeService(),
-      child: const LguMobileApp(),
-    ),
-  );
+  runApp(const LguMobileApp());
 }
 
 class LguMobileApp extends StatelessWidget {
@@ -44,11 +44,13 @@ class LguMobileApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeService = Provider.of<ThemeService>(context);
+    final baseTextTheme = GoogleFonts.sourceSans3TextTheme();
+    final headingTextTheme = GoogleFonts.playfairDisplayTextTheme();
+
     return MaterialApp(
       title: 'Ormoc LGU',
       debugShowCheckedModeBanner: false,
-      themeMode: themeService.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: ThemeMode.light,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -56,14 +58,17 @@ class LguMobileApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
         scaffoldBackgroundColor: AppColors.bg,
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          brightness: Brightness.dark,
+        textTheme: baseTextTheme.copyWith(
+          displayLarge: headingTextTheme.displayLarge,
+          displayMedium: headingTextTheme.displayMedium,
+          displaySmall: headingTextTheme.displaySmall,
+          headlineLarge: headingTextTheme.headlineLarge,
+          headlineMedium: headingTextTheme.headlineMedium,
+          headlineSmall: headingTextTheme.headlineSmall,
+          titleLarge: headingTextTheme.titleLarge,
+          titleMedium: headingTextTheme.titleMedium,
+          titleSmall: headingTextTheme.titleSmall,
         ),
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
       ),
       home: const AppRouter(),
     );
@@ -150,10 +155,10 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 
   Future<void> _login() async {
-    final username = _usernameCtrl.text.trim();
+    final input = _usernameCtrl.text.trim();
     final password = _passwordCtrl.text;
 
-    if (username.isEmpty) {
+    if (input.isEmpty) {
       showToast(
         context,
         'Please enter your username.',
@@ -174,10 +179,22 @@ class _LoginScreenState extends State<_LoginScreen> {
     setState(() => _loading = true);
 
     try {
-      final numericId = RegExp(r'\d+').firstMatch(username)?.group(0);
+      String displayName;
+      String email;
+
+      if (input.contains('@')) {
+        email = input;
+        displayName = _formatDisplayName(input.split('@')[0]);
+      } else {
+        displayName = _formatDisplayName(input);
+        email = '${input.toLowerCase().replaceAll(' ', '.')}@ormoc.gov.ph';
+      }
+
+      final numericId = RegExp(r'\d+').firstMatch(input)?.group(0);
       final session = SessionModel(
         userId: int.tryParse(numericId ?? '') ?? 1001,
-        firstName: _formatDisplayName(username),
+        firstName: displayName,
+        email: email,
         accountType: 'Event Staff',
         access: 'Mobile',
       );
@@ -189,8 +206,63 @@ class _LoginScreenState extends State<_LoginScreen> {
     }
   }
 
+  Future<void> _scanLoginQr() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => QrScannerScreen(
+          onScanned: (code) async {
+            // In a real app, you'd validate the code with an API
+            // Here we just simulate a login if any code is scanned
+            return true;
+          },
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() => _loading = true);
+      try {
+        SessionModel session;
+        try {
+          // Attempt to parse result as JSON
+          final data = jsonDecode(result) as Map<String, dynamic>;
+          session = SessionModel(
+            userId: int.tryParse(data['user_id']?.toString() ?? '') ??
+                int.tryParse(data['id']?.toString() ?? '') ??
+                2002,
+            firstName: data['full_name'] ??
+                data['fullName'] ??
+                data['name'] ??
+                data['first_name'] ??
+                'User',
+            email: data['email'],
+            accountType: data['account_type'] ?? 'Event Staff',
+            access: 'Mobile',
+          );
+        } catch (_) {
+          // Fallback if not JSON (original logic)
+          final namePart = result.contains('@') ? result.split('@')[0] : result;
+          session = SessionModel(
+            userId: 2002,
+            firstName: _formatDisplayName(namePart),
+            email: result.contains('@') ? result : '$result@ormoc.gov.ph',
+            accountType: 'Event Staff',
+            access: 'Mobile',
+          );
+        }
+        await widget.onLogin(session, _rememberMe);
+      } finally {
+        if (mounted) {
+          setState(() => _loading = false);
+        }
+      }
+    }
+  }
+
   String _formatDisplayName(String username) {
-    final cleaned = username
+    String cleaned = username.replaceAll(RegExp(r'\d+$'), '');
+
+    cleaned = cleaned
         .replaceAll(RegExp(r'[._-]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
@@ -208,10 +280,28 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 
   void _showHelpMessage(String label) {
-    showToast(
-      context,
-      '$label is not available in this demo yet.',
-      type: ToastType.info,
+    Widget target;
+    switch (label) {
+      case 'Privacy Policy':
+        target = const PrivacyPolicyScreen();
+        break;
+      case 'Terms of Service':
+        target = const TermsOfServiceScreen();
+        break;
+      case 'Help':
+        target = const HelpScreen();
+        break;
+      default:
+        showToast(
+          context,
+          '$label is not available in this demo yet.',
+          type: ToastType.info,
+        );
+        return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => target),
     );
   }
 
@@ -258,17 +348,17 @@ class _LoginScreenState extends State<_LoginScreen> {
         prefixIcon: Icon(icon, color: Colors.white54, size: 20),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.08),
+        fillColor: Colors.white.withOpacity(0.08),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: Colors.white.withOpacity(0.08),
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.10),
+            color: Colors.white.withOpacity(0.10),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -286,31 +376,14 @@ class _LoginScreenState extends State<_LoginScreen> {
   Widget _buildBrandHeader() {
     return Column(
       children: [
-        Container(
-          width: 86,
-          height: 86,
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.98),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
-                blurRadius: 26,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: ClipOval(
-            child: Image.asset(
-              'lib/assets/images/ormoc.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.location_city,
-                color: AppColors.primary,
-                size: 38,
-              ),
-            ),
+        Image.asset(
+          'lib/assets/images/ormoc.png',
+          height: 120,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Icon(
+            Icons.location_city,
+            color: Colors.white,
+            size: 80,
           ),
         ),
         const SizedBox(height: 20),
@@ -329,7 +402,7 @@ class _LoginScreenState extends State<_LoginScreen> {
           'Event Management System',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.78),
+            color: Colors.white.withOpacity(0.78),
             fontSize: 15,
             fontWeight: FontWeight.w500,
           ),
@@ -359,40 +432,26 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 
   Widget _buildLoginCard() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(26, 28, 26, 24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF314565).withValues(alpha: 0.90),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 28,
-            offset: const Offset(0, 20),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Align(
-            child: Text(
-              'Welcome Back',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Align(
+          child: Text(
+            'Welcome Back',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
             ),
           ),
+        ),
           const SizedBox(height: 6),
           Align(
             child: Text(
               'Sign in to continue',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.62),
+                color: Colors.white.withOpacity(0.62),
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
@@ -497,49 +556,70 @@ class _LoginScreenState extends State<_LoginScreen> {
             ],
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _loading ? null : _login,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3568E6),
-                foregroundColor: Colors.white,
-                disabledBackgroundColor:
-                    const Color(0xFF3568E6).withValues(alpha: 0.65),
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3568E6),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        const Color(0xFF3568E6).withOpacity(0.65),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Sign In',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(width: 10),
+                            Icon(Icons.arrow_forward_rounded, size: 20),
+                          ],
+                        ),
                 ),
               ),
-              child: _loading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Sign In',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(width: 10),
-                        Icon(Icons.arrow_forward_rounded, size: 20),
-                      ],
+              const SizedBox(width: 12),
+              Material(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: _loading ? null : _scanLoginQr,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: Colors.white,
+                      size: 28,
                     ),
-            ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
-      ),
-    );
+      );
   }
 
   @override
@@ -548,41 +628,19 @@ class _LoginScreenState extends State<_LoginScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
             colors: [
-              Color(0xFF10284D),
-              Color(0xFF17335B),
-              Color(0xFF112A4B),
+              Colors.black,
+              Color(0xFF000000),
+              Color(0xFF4F8DFF),
+              Colors.black,
             ],
+            stops: [0.0, 0.2, 0.6, 1.0],
           ),
         ),
         child: Stack(
           children: [
-            Positioned(
-              top: -140,
-              left: -80,
-              child: Container(
-                width: 260,
-                height: 260,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.05),
-                ),
-              ),
-            ),
-            Positioned(
-              right: -110,
-              bottom: 90,
-              child: Container(
-                width: 220,
-                height: 220,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.03),
-                ),
-              ),
-            ),
             SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -600,16 +658,13 @@ class _LoginScreenState extends State<_LoginScreen> {
                         children: [
                           _buildBrandHeader(),
                           const SizedBox(height: 30),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 420),
-                            child: _buildLoginCard(),
-                          ),
+                          _buildLoginCard(),
                           const SizedBox(height: 28),
                           Text(
                             '(c) 2026 City of Ormoc. All rights reserved.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.45),
+                              color: Colors.white.withOpacity(0.45),
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
@@ -624,7 +679,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                               Text(
                                 '|',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.28),
+                                  color: Colors.white.withOpacity(0.28),
                                   fontSize: 12,
                                 ),
                               ),
@@ -632,7 +687,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                               Text(
                                 '|',
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.28),
+                                  color: Colors.white.withOpacity(0.28),
                                   fontSize: 12,
                                 ),
                               ),

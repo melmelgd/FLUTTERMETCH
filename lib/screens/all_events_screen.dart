@@ -1,6 +1,7 @@
 // lib/screens/all_events_screen.dart
 
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import '../models/event_model.dart';
 import '../models/session_model.dart';
 import '../utils/app_colors.dart';
@@ -9,6 +10,7 @@ import '../services/database_service.dart';
 import '../utils/toast_helper.dart';
 import 'qr_scanner_screen.dart';
 import 'event_detail_screen.dart';
+import 'upload_screen.dart';
 import '../models/attendance_record.dart';
 import 'package:intl/intl.dart';
 
@@ -26,12 +28,28 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   List<EventModel> _allEvents = [];
   List<EventModel> _filteredEvents = [];
   bool _loaded = false;
+  String _selectedStatus = 'All';
+  int _pendingCount = 0;
+
+  final List<String> _statuses = [
+    'All',
+    'Upcoming',
+    'Ongoing',
+    'Completed',
+    'Cancelled'
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadEvents();
+    _checkPending();
     _searchController.addListener(_onSearch);
+  }
+
+  Future<void> _checkPending() async {
+    final p = await DatabaseService.getPendingRecords();
+    if (mounted) setState(() => _pendingCount = p.length);
   }
 
   @override
@@ -42,10 +60,18 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
 
   Future<void> _loadEvents() async {
     final events = await DatabaseService.getCachedEvents();
+    
+    // Update attendee counts from local records for each event
+    final updatedEvents = <EventModel>[];
+    for (var e in events) {
+      final count = await DatabaseService.getEventAttendeeCount(e.eventId, e.eventName);
+      updatedEvents.add(e.copyWith(attendeeCount: count > 0 ? count : e.attendeeCount));
+    }
+
     if (!mounted) return;
     setState(() {
-      _allEvents = events;
-      _filteredEvents = events;
+      _allEvents = updatedEvents;
+      _filteredEvents = updatedEvents;
       _loaded = true;
     });
   }
@@ -54,8 +80,11 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     final query = _searchController.text.toLowerCase();
     setState(() {
       _filteredEvents = _allEvents.where((e) {
-        return e.eventName.toLowerCase().contains(query) ||
+        final matchesSearch = e.eventName.toLowerCase().contains(query) ||
             (e.host ?? '').toLowerCase().contains(query);
+        final matchesStatus = _selectedStatus == 'All' ||
+            (e.status?.toLowerCase() == _selectedStatus.toLowerCase());
+        return matchesSearch && matchesStatus;
       }).toList();
     });
   }
@@ -111,7 +140,8 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                               NewEventScreen(session: widget.session),
                         ),
                       );
-                      if (mounted) Navigator.pop(context, added == true);
+                      if (!context.mounted) return;
+                      Navigator.pop(context, added == true);
                     },
                   ),
                 ),
@@ -133,7 +163,8 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                           ),
                         ),
                       );
-                      if (mounted) Navigator.pop(context, added == true);
+                      if (!context.mounted) return;
+                      Navigator.pop(context, added == true);
                     },
                   ),
                 ),
@@ -199,17 +230,25 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
         // ── Event list ─────────────────────────────────────────
         Expanded(
           child: Container(
-            color: Colors.white,
+            color: const Color(0xFFF1F5F9), // Light background like image
             child: !_loaded
                 ? const Center(child: CircularProgressIndicator())
-                : _filteredEvents.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(top: 20, bottom: 100),
-                        itemCount: _filteredEvents.length,
-                        itemBuilder: (_, i) =>
-                            _buildEventCard(_filteredEvents[i]),
+                : Column(
+                    children: [
+                      _buildStatusFilters(),
+                      Expanded(
+                        child: _filteredEvents.isEmpty
+                            ? _buildEmptyState()
+                            : ListView.builder(
+                                padding: const EdgeInsets.only(
+                                    top: 10, bottom: 100, left: 16, right: 16),
+                                itemCount: _filteredEvents.length,
+                                itemBuilder: (_, i) =>
+                                    _buildEventCard(_filteredEvents[i]),
+                              ),
                       ),
+                    ],
+                  ),
           ),
         ),
       ],
@@ -233,12 +272,12 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   Widget _buildHeader() {
     final canPop = Navigator.of(context).canPop();
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.headerGradient),
+      color: const Color(0xFFF1F5F9),
       padding: EdgeInsets.fromLTRB(
         20,
-        MediaQuery.of(context).padding.top + 16,
+        MediaQuery.of(context).padding.top + 8,
         20,
-        24,
+        20,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,37 +292,91 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                     height: 36,
                     margin: const EdgeInsets.only(right: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
+                      color: Colors.black.withOpacity(0.05),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white,
+                      color: Color(0xFF64748B),
                       size: 16,
                     ),
                   ),
                 ),
               ],
-              _buildSeal(),
-              const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('City of Ormoc',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700)),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: const Color(0xFF0F172A),
+                            fontWeight: FontWeight.w800)),
                     Text('EVENT MANAGEMENT',
                         style: TextStyle(
-                            color: Colors.white70,
+                            color: const Color(0xFF64748B),
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.4)),
                   ],
                 ),
               ),
+              // Notification Bell
+              GestureDetector(
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const UploadScreen()),
+                  );
+                  _checkPending();
+                },
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 10,
+                          )
+                        ],
+                      ),
+                      child: const Icon(Icons.notifications_none_rounded,
+                          color: Color(0xFF475569)),
+                    ),
+                    if (_pendingCount > 0)
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEF4444),
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          child: Text(
+                            '$_pendingCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
               _buildAvatar(),
             ],
           ),
@@ -294,19 +387,18 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'All Events',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: const Color(0xFF0F172A),
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   Text(
-                    '${_allEvents.length} events',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.70),
-                      fontSize: 13,
+                    '${_allEvents.length} events total',
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -318,54 +410,78 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                   width: 44,
                   height: 44,
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF5A623),
+                    color: Color(0xFF2563EB),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.add_circle_outline_rounded,
-                      color: Color(0xFF1B2D5B)),
+                  child: const Icon(Icons.add, color: Colors.white, size: 24),
                 ),
               )
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           _buildSearchBar(),
         ],
       ),
     );
   }
 
-  Widget _buildSeal() {
+  Widget _buildStatusFilters() {
     return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 8)
-        ],
-      ),
-      child: const ClipOval(
-        child: Icon(Icons.location_city, color: AppColors.primary, size: 22),
+      height: 60,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _statuses.length,
+        itemBuilder: (context, index) {
+          final status = _statuses[index];
+          final isSelected = _selectedStatus == status;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: Text(status),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  _selectedStatus = status;
+                  _onSearch();
+                });
+              },
+              labelStyle: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF64748B),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+              backgroundColor: Colors.white,
+              selectedColor: const Color(0xFF2563EB),
+              checkmarkColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              side: BorderSide(
+                color: isSelected ? Colors.transparent : const Color(0xFFE2E8F0),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildAvatar() {
     return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: const Color(0xFF4B6CB7),
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF1F5F9),
         shape: BoxShape.circle,
-        border: Border.all(
-            color: Colors.white.withValues(alpha: 0.40), width: 1.5),
       ),
       child: Center(
         child: Text(
           _userInitial,
           style: const TextStyle(
-              color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+              color: Color(0xFF94A3B8),
+              fontSize: 15,
+              fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -375,19 +491,24 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   Widget _buildSearchBar() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+          )
+        ],
       ),
       child: TextField(
         controller: _searchController,
-        style: const TextStyle(fontSize: 14, color: Colors.white),
-        decoration: const InputDecoration(
+        style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
+        decoration: InputDecoration(
           hintText: 'Search events...',
-          hintStyle: TextStyle(fontSize: 14, color: Colors.white70),
-          prefixIcon:
-              Icon(Icons.search_rounded, color: Colors.white70, size: 20),
+          hintStyle: const TextStyle(fontSize: 15, color: Color(0xFF94A3B8)),
+          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 22),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
       ),
     );
@@ -424,163 +545,182 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   // ── Event card ────────────────────────────────────────────────
   Widget _buildEventCard(EventModel event) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Building Icon
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Building Icon
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.account_balance_rounded,
+                      size: 32, color: Color(0xFF64748B)),
                 ),
-                child: const Icon(Icons.account_balance_rounded,
-                    size: 30, color: Color(0xFF707070)),
-              ),
-              const SizedBox(width: 16),
-              // Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      event.eventName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textMain,
+                const SizedBox(width: 16),
+                // Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              event.eventName,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ),
+                          _buildStatusBadge(event.status ?? 'upcoming'),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_today_outlined,
-                            size: 14, color: AppColors.textMuted),
-                        const SizedBox(width: 4),
-                        Text(event.eventDate ?? '',
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textMuted)),
-                        const SizedBox(width: 12),
-                        const Icon(Icons.location_on_outlined,
-                            size: 14, color: AppColors.textMuted),
-                        const SizedBox(width: 4),
-                        Text(event.eventLocation ?? 'None',
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textMuted)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.people_outline_rounded,
-                            size: 14, color: AppColors.textMuted),
-                        const SizedBox(width: 4),
-                        Text('${event.attendeeCount ?? 0} attendees',
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textMuted)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              // Status Badge
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0F2FE),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  event.status ?? 'upcoming',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF0284C7),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _buildCardMeta(Icons.calendar_today_outlined, event.eventDate ?? ''),
+                          const SizedBox(width: 12),
+                          _buildCardMeta(Icons.location_on_outlined, event.eventLocation ?? 'Ormoc City'),
+                          const SizedBox(width: 12),
+                          _buildCardMeta(Icons.people_outline_rounded, '${event.attendeeCount ?? 0} attendees'),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-          const Divider(height: 1),
-          const SizedBox(height: 16),
-          // Actions
-          Row(
-            children: [
-              _buildModernAction(
-                icon: Icons.visibility_outlined,
-                label: 'View',
-                color: Colors.grey[600]!,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EventDetailScreen(event: event),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildModernAction(
-                icon: Icons.edit_outlined,
-                label: 'Edit',
-                color: const Color(0xFF4F46E5),
-                onTap: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => NewEventScreen(
-                        session: widget.session,
-                        existingEvent: event,
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          // Actions Row
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                _buildCardAction(
+                  icon: Icons.visibility_outlined,
+                  label: 'View',
+                  color: const Color(0xFF64748B),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EventDetailScreen(event: event),
                       ),
-                    ),
-                  );
-                  if (result == true) {
-                    _loadEvents();
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildModernAction(
-                icon: Icons.group_outlined,
-                label: 'Attend',
-                color: const Color(0xFF10B981),
-                onTap: () {
-                  if (widget.session == null) return;
-                  _showAttendOptions(event);
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildModernAction(
-                icon: Icons.delete_outline,
-                label: '',
-                color: const Color(0xFFEF4444),
-                onTap: () => _confirmDelete(event),
-              ),
-            ],
+                    );
+                  },
+                ),
+                _buildVerticalDivider(),
+                _buildCardAction(
+                  icon: Icons.edit_outlined,
+                  label: 'Edit',
+                  color: const Color(0xFF2563EB),
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NewEventScreen(
+                          session: widget.session,
+                          existingEvent: event,
+                        ),
+                      ),
+                    );
+                    if (result == true) {
+                      _loadEvents();
+                    }
+                  },
+                ),
+                _buildVerticalDivider(),
+                _buildCardAction(
+                  icon: Icons.group_outlined,
+                  label: 'Attend',
+                  color: const Color(0xFF059669),
+                  onTap: () {
+                    if (widget.session == null) return;
+                    _showAttendOptions(event);
+                  },
+                ),
+                _buildVerticalDivider(),
+                _buildCardAction(
+                  icon: Icons.delete_outline_rounded,
+                  label: '',
+                  color: const Color(0xFFEF4444),
+                  onTap: () => _confirmDelete(event),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModernAction({
+  Widget _buildStatusBadge(String status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: Color(0xFF3B82F6),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            status.toLowerCase(),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF3B82F6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardMeta(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF94A3B8)),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: const TextStyle(
+              fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCardAction({
     required IconData icon,
     required String label,
     required Color color,
@@ -590,25 +730,19 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
       flex: label.isEmpty ? 0 : 1,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.05),
-            border: Border.all(color: color.withValues(alpha: 0.1)),
-            borderRadius: BorderRadius.circular(12),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: color),
+              Icon(icon, size: 18, color: color),
               if (label.isNotEmpty) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: 8),
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                     color: color,
                   ),
                 ),
@@ -617,6 +751,16 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildVerticalDivider() {
+    return const VerticalDivider(
+      width: 1,
+      thickness: 1,
+      color: Color(0xFFF1F5F9),
+      indent: 12,
+      endIndent: 12,
     );
   }
 
@@ -682,7 +826,38 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                         MaterialPageRoute(
                           builder: (_) => QrScannerScreen(
                             onScanned: (code) async {
-                              _recordAttendance(event, code, 'QR Scanned');
+                              String name = 'QR Scanned';
+                              String dept = 'N/A';
+                              String attendeeCode = code;
+
+                              try {
+                                final data = jsonDecode(code);
+                                if (data is Map) {
+                                  name = data['name'] ?? data['attendee_name'] ?? 'QR Scanned';
+                                  dept = data['department'] ?? data['dept'] ?? 'N/A';
+                                  attendeeCode = data['id']?.toString() ?? data['code']?.toString() ?? code;
+                                }
+                              } catch (_) {
+                                if (code.contains(',')) {
+                                  final parts = code.split(',');
+                                  if (parts.length >= 2) {
+                                    attendeeCode = parts[0].trim();
+                                    name = parts[1].trim();
+                                    if (parts.length >= 3) dept = parts[2].trim();
+                                  }
+                                } else {
+                                  final existingName = await DatabaseService.findNameByCode(code);
+                                  if (existingName != null) {
+                                    name = existingName;
+                                  } else if (!RegExp(r'^[0-9]+$').hasMatch(code)) {
+                                    name = code;
+                                  } else {
+                                    name = 'ID: $code';
+                                  }
+                                }
+                              }
+
+                              _recordAttendance(event, attendeeCode, name, department: dept);
                               return true;
                             },
                           ),
@@ -760,15 +935,16 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     );
   }
 
-  Future<void> _recordAttendance(EventModel event, String code, String name) async {
+  Future<void> _recordAttendance(EventModel event, String code, String name, {String department = 'N/A'}) async {
     final now = DateTime.now();
     final record = AttendanceRecord(
       attendeeName: name,
       attendeeCode: code,
-      department: 'N/A',
+      department: department,
       attendanceStatus: 'present',
       timeIn: DateFormat('HH:mm').format(now),
       eventId: event.eventId,
+      eventData: event.toJson(),
       eventName: event.eventName,
       eventDate: event.eventDate,
       checkinType: 'in',

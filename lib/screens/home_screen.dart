@@ -3,13 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
 import '../models/session_model.dart';
 import '../models/event_model.dart';
 import '../services/session_service.dart';
 import '../services/database_service.dart';
 import '../utils/app_colors.dart';
-import '../utils/toast_helper.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../main.dart';
 import 'all_events_screen.dart';
@@ -62,12 +60,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadEvents() async {
     final cached = await DatabaseService.getCachedEvents();
+    final attendeeCount = await DatabaseService.getTotalAttendeeCount();
+    
+    // Update attendee counts from local records for each event
+    final updatedEvents = <EventModel>[];
+    for (var e in cached) {
+      final count = await DatabaseService.getEventAttendeeCount(e.eventId, e.eventName);
+      updatedEvents.add(e.copyWith(attendeeCount: count > 0 ? count : e.attendeeCount));
+    }
+
     if (!mounted) return;
     setState(() {
-      _totalEvents = cached.length;
-      _completedEvents = 0; // Logic for completed could be added later
-      _totalAttendees = 0; // Total attendees across events
-      _upcomingEvents = cached;
+      _totalEvents = updatedEvents.length;
+      _completedEvents = updatedEvents.where((e) => e.status?.toLowerCase() == 'completed').length;
+      _totalAttendees = attendeeCount;
+      _upcomingEvents = updatedEvents;
     });
   }
 
@@ -106,109 +113,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _goToAttendance({EventModel? initialEvent}) async {
     if (_session == null) return;
-    // AttendanceScreen removed
-    showToast(context, 'Attendance Screen Removed', type: ToastType.warning);
+
+    if (initialEvent != null) {
+      // If an event is provided, show its details or sync options
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => UploadScreen(initialEvent: initialEvent.eventName)),
+      );
+    } else {
+      // If called from the sync notice
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const UploadScreen()),
+      );
+    }
     await _checkPending();
     await _loadEvents();
   }
 
-  void _onFabPressed() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Create New Event',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textMain,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Select how you want to add the event',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textMuted,
-              ),
-            ),
-            const SizedBox(height: 28),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionBtn(
-                    icon: Icons.edit_note_rounded,
-                    label: 'Manual Entry',
-                    color: const Color(0xFF1B2D5B),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => NewEventScreen(session: _session),
-                        ),
-                      );
-                      if (result == true) {
-                        _loadEvents();
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildActionBtn(
-                    icon: Icons.qr_code_scanner_rounded,
-                    label: 'QR Scan',
-                    color: const Color(0xFFF5A623),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const QrScannerScreen(),
-                        ),
-                      );
-                      if (!mounted) return;
-                      if (result is String && result.isNotEmpty) {
-                        try {
-                          final data = jsonDecode(result);
-                          final ev = EventModel.fromJson(data);
-                          _goToAttendance(initialEvent: ev);
-                        } catch (_) {
-                          if (mounted) {
-                            showToast(context, 'Invalid QR data',
-                                type: ToastType.error);
-                          }
-                        }
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
+  Future<void> _onFabPressed() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NewEventScreen(session: _session),
       ),
     );
+    if (result == true && mounted) {
+      _loadEvents();
+    }
   }
 
   Widget _buildActionBtn({
@@ -223,9 +156,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
+          color: color.withOpacity(0.08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
+          border: Border.all(color: color.withOpacity(0.15)),
         ),
         child: Column(
           children: [
@@ -259,8 +192,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             if (_selectedTab == 0) _buildHeader(),
-            if (_selectedTab == 0 && _isOnline && _pendingCount > 0)
-              _buildSyncNotice(),
             Expanded(child: _buildTabContent()),
           ],
         ),
@@ -279,9 +210,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return _buildBody();
       case 1:
         return AllEventsScreen(session: _session);
-      case 2:
-        return const UploadScreen();
       case 3:
+        return const UploadScreen();
+      case 4:
         return SettingsScreen(session: _session);
       default:
         return _buildBody();
@@ -290,185 +221,107 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── Header ────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.headerGradient),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _buildSeal(),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('City of Ormoc',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700)),
-                    Text('EVENT MANAGEMENT',
-                        style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.4)),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: _logout,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4B6CB7),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.40),
-                        width: 1.5),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _userInitial,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text('Good day!',
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.75),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
-          const SizedBox(height: 4),
-          const Text('Ormoc City Events',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  height: 1.1)),
-          const SizedBox(height: 4),
-          Text('Manage events & attendance',
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400)),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                  child: _buildDarkStatCard(
-                      label: 'Total Events',
-                      value: _totalEvents.toString(),
-                      icon: Icons.calendar_today_outlined)),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _buildDarkStatCard(
-                      label: 'Attendees',
-                      value: _totalAttendees.toString(),
-                      icon: Icons.people_outline_rounded)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSeal() {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2), blurRadius: 8)
-        ],
-      ),
-      child: const ClipOval(
-        child:
-            Icon(Icons.location_city, color: AppColors.primary, size: 22),
-      ),
-    );
-  }
-
-  Widget _buildDarkStatCard(
-      {required String label,
-      required String value,
-      required IconData icon}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Icon(icon, color: Colors.white70, size: 15),
-            const SizedBox(width: 6),
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500)),
-          ]),
-          const SizedBox(height: 8),
-          Text(value,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  height: 1.0)),
-        ],
-      ),
-    );
-  }
-
-  // ── Sync notice ───────────────────────────────────────────────────
-  Widget _buildSyncNotice() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
-        border: Border.all(color: const Color(0xFFFDE68A)),
-        borderRadius: BorderRadius.circular(10),
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              '⏳ $_pendingCount attendance record(s) pending sync',
-              style:
-                  const TextStyle(fontSize: 13, color: Color(0xFF92400E)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'City of Ormoc',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: const Color(0xFF0F172A),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  'EVENT MANAGEMENT',
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 8),
+          // Notification Bell
           GestureDetector(
-            onTap: _goToAttendance,
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const UploadScreen()),
+              );
+              _checkPending();
+            },
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 10,
+                      )
+                    ],
+                  ),
+                  child: const Icon(Icons.notifications_none_rounded, color: Color(0xFF475569)),
+                ),
+                if (_pendingCount > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        '$_pendingCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Profile Avatar
+          GestureDetector(
+            onTap: () => setState(() => _selectedTab = 4),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                  color: AppColors.warning,
-                  borderRadius: BorderRadius.circular(6)),
-              child: const Text('Sync Now',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  _userInitial,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -481,121 +334,258 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_loaded) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final now = DateTime.now();
+    final todayStr = DateFormat('MMM dd, yyyy').format(now);
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                  child: _buildLightStatCard(
-                      label: 'Upcoming',
-                      value: _upcomingEvents.length.toString(),
-                      icon: Icons.access_time_rounded,
-                      iconColor: AppColors.primary)),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _buildLightStatCard(
-                      label: 'Completed',
-                      value: _completedEvents.toString(),
-                      icon: Icons.check_circle_outline_rounded,
-                      iconColor: const Color(0xFF10B981))),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Upcoming Events',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMain)),
-              TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AllEventsScreen(session: _session),
+          // Greeting Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: const Border(
+                top: BorderSide(color: Color(0xFF2563EB), width: 4),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                )
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Good day 👋',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Ormoc Events',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Manage events & track attendance',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                child: const Text('See all',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600)),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text(
+                      'TODAY',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF94A3B8),
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    Text(
+                      todayStr,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Stats Grid
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 1.6,
+            children: [
+              _buildStatCard(
+                label: 'Total Events',
+                value: _totalEvents.toString(),
+                icon: Icons.calendar_month_rounded,
+                iconBg: const Color(0xFFEFF6FF),
+                iconColor: const Color(0xFF3B82F6),
+              ),
+              _buildStatCard(
+                label: 'Attendees',
+                value: _totalAttendees.toString(),
+                icon: Icons.group_outlined,
+                iconBg: const Color(0xFFFFF7ED),
+                iconColor: const Color(0xFFF59E0B),
+              ),
+              _buildStatCard(
+                label: 'Upcoming',
+                value: _upcomingEvents.length.toString(),
+                icon: Icons.access_time_rounded,
+                iconBg: const Color(0xFFF0F9FF),
+                iconColor: const Color(0xFF0EA5E9),
+              ),
+              _buildStatCard(
+                label: 'Completed',
+                value: _completedEvents.toString(),
+                icon: Icons.check_circle_outline_rounded,
+                iconBg: const Color(0xFFF0FDF4),
+                iconColor: const Color(0xFF10B981),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (_upcomingEvents.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14)),
-              child: const Center(
-                child: Text('No upcoming events',
-                    style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500)),
-              ),
-            )
-          else
-            Column(
-                children: _upcomingEvents
-                    .map((e) => _buildEventCard(e))
-                    .toList()),
+
+          const SizedBox(height: 24),
+
+          // Upcoming Events Section
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                )
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Upcoming Events',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AllEventsScreen(session: _session),
+                        ),
+                      ),
+                      icon: const Text(
+                        'See all',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                      label: const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF2563EB)),
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                if (_upcomingEvents.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Text(
+                        'No upcoming events',
+                        style: TextStyle(color: Color(0xFF94A3B8)),
+                      ),
+                    ),
+                  )
+                else
+                  ..._upcomingEvents.take(3).map((e) => _buildEventCard(e)),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLightStatCard(
-      {required String label,
-      required String value,
-      required IconData icon,
-      required Color iconColor}) {
+  Widget _buildStatCard({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
         ],
       ),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle),
-            child: Icon(icon, color: iconColor, size: 18),
+              color: iconBg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: iconColor, size: 24),
           ),
           const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(value,
-                style: TextStyle(
-                    fontSize: 22,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: iconColor)),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w500)),
-          ]),
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -612,95 +602,107 @@ class _HomeScreenState extends State<HomeScreen> {
         day = date.day.toString();
       }
     } catch (_) {
-      // Fallback to old splitting if parsing fails
       final parts = (event.eventDate ?? '').split(' ');
-      month = parts.isNotEmpty ? parts[0].toUpperCase() : '';
-      day = parts.length > 1 ? parts[1] : '';
+      month = parts.isNotEmpty ? parts[0].toUpperCase() : 'APR';
+      day = parts.length > 1 ? parts[1] : '16';
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
-        ],
-      ),
+      margin: const EdgeInsets.only(bottom: 16),
       child: Row(
         children: [
+          // Date Box
           Container(
-            width: 48,
-            height: 54,
+            width: 56,
+            height: 64,
             decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(10)),
+              color: const Color(0xFF2563EB),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(month,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5)),
-                const SizedBox(height: 2),
-                Text(day,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        height: 1.0)),
+                Text(
+                  month,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                Text(
+                  day,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
+          // Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(event.eventName,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textMain)),
-                const SizedBox(height: 5),
-                Row(children: [
-                  Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                          color: Color(0xFFE05C8A),
-                          shape: BoxShape.circle)),
-                  const SizedBox(width: 5),
-                  Text(
-                      event.host ??
-                          event.eventTime ??
-                          'No details',
-                      style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                          fontWeight: FontWeight.w500)),
-                ]),
+                Text(
+                  event.eventName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 4),
+                    Text(
+                      event.eventLocation ?? 'Ormoc City',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // Status Chip
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF3B82F6),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        event.status ?? 'upcoming',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF3B82F6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () => _goToAttendance(initialEvent: event),
-            child: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                  color: AppColors.bg,
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.arrow_forward_ios_rounded,
-                  size: 13, color: AppColors.textMuted),
-            ),
-          ),
+          const Icon(Icons.arrow_forward_rounded, color: Color(0xFFCBD5E1), size: 20),
         ],
       ),
     );

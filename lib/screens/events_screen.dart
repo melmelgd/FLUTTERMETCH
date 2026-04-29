@@ -7,7 +7,6 @@ import '../models/session_model.dart';
 import '../utils/app_colors.dart';
 import '../utils/toast_helper.dart';
 import 'new_event_screen.dart';
-import 'qr_scanner_screen.dart';
 import 'event_detail_screen.dart';
 import 'upload_screen.dart';
 import '../services/database_service.dart';
@@ -42,10 +41,18 @@ class _EventsScreenState extends State<EventsScreen> {
 
   Future<void> _loadEvents() async {
     final events = await DatabaseService.getCachedEvents();
+    
+    // Update attendee counts from local records for each event
+    final updatedEvents = <EventModel>[];
+    for (var e in events) {
+      final count = await DatabaseService.getEventAttendeeCount(e.eventId, e.eventName);
+      updatedEvents.add(e.copyWith(attendeeCount: count > 0 ? count : e.attendeeCount));
+    }
+
     if (mounted) {
       setState(() {
-        _allEvents = events;
-        _filtered = events;
+        _allEvents = updatedEvents;
+        _filtered = updatedEvents;
       });
     }
   }
@@ -218,15 +225,16 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
-  Future<void> _recordAttendance(EventModel event, String code, String name) async {
+  Future<void> _recordAttendance(EventModel event, String code, String name, {String department = 'N/A'}) async {
     final now = DateTime.now();
     final record = AttendanceRecord(
       attendeeName: name,
       attendeeCode: code,
-      department: 'N/A',
+      department: department,
       attendanceStatus: 'present',
       timeIn: DateFormat('HH:mm').format(now),
       eventId: event.eventId,
+      eventData: event.toJson(),
       eventName: event.eventName,
       eventDate: event.eventDate,
       checkinType: 'in',
@@ -347,7 +355,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     Text(
                       '${_allEvents.length} event${_allEvents.length != 1 ? 's' : ''}',
                       style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.65),
+                          color: Colors.white.withOpacity(0.65),
                           fontSize: 13),
                     ),
                   ],
@@ -372,7 +380,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     boxShadow: [
                       BoxShadow(
                           color: const Color(0xFFF5A623)
-                              .withValues(alpha: 0.45),
+                              .withOpacity(0.45),
                           blurRadius: 12,
                           offset: const Offset(0, 4))
                     ],
@@ -388,10 +396,10 @@ class _EventsScreenState extends State<EventsScreen> {
           Container(
             height: 44,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.14),
+              color: Colors.white.withOpacity(0.14),
               borderRadius: BorderRadius.circular(12),
               border:
-                  Border.all(color: Colors.white.withValues(alpha: 0.20)),
+                  Border.all(color: Colors.white.withOpacity(0.20)),
             ),
             child: TextField(
               controller: _searchController,
@@ -399,10 +407,10 @@ class _EventsScreenState extends State<EventsScreen> {
               decoration: InputDecoration(
                 hintText: 'Search events...',
                 hintStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.50),
+                    color: Colors.white.withOpacity(0.50),
                     fontSize: 14),
                 prefixIcon: Icon(Icons.search_rounded,
-                    color: Colors.white.withValues(alpha: 0.60), size: 20),
+                    color: Colors.white.withOpacity(0.60), size: 20),
                 border: InputBorder.none,
                 contentPadding:
                     const EdgeInsets.symmetric(vertical: 12),
@@ -423,7 +431,7 @@ class _EventsScreenState extends State<EventsScreen> {
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2), blurRadius: 8)
+              color: Colors.black.withOpacity(0.2), blurRadius: 8)
         ],
       ),
       child: const ClipOval(
@@ -445,7 +453,7 @@ class _EventsScreenState extends State<EventsScreen> {
         color: const Color(0xFF4B6CB7),
         shape: BoxShape.circle,
         border: Border.all(
-            color: Colors.white.withValues(alpha: 0.40), width: 1.5),
+            color: Colors.white.withOpacity(0.40), width: 1.5),
       ),
       child: Center(
         child: Text(initial,
@@ -466,7 +474,7 @@ class _EventsScreenState extends State<EventsScreen> {
           children: [
             Icon(Icons.event_busy_rounded,
                 size: 48,
-                color: AppColors.textMuted.withValues(alpha: 0.4)),
+                color: AppColors.textMuted.withOpacity(0.4)),
             const SizedBox(height: 12),
             const Text('No events found',
                 style: TextStyle(
@@ -494,7 +502,7 @@ class _EventsScreenState extends State<EventsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Colors.black.withOpacity(0.06),
               blurRadius: 10,
               offset: const Offset(0, 3))
         ],
